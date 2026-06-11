@@ -23,13 +23,14 @@ uv build
 Release tags create GitHub releases through `.github/workflows/release.yml`.
 
 ```bash
-uv run scripts/check_release.py --tag v0.1.0
+VERSION=0.1.2
+uv run scripts/check_release.py --tag "v${VERSION}"
 uv run scripts/audit_secrets.py
 uv run ruff check .
 uv run pytest
 uv build
-git tag -a v0.1.0 -m "PromptCloak 0.1.0"
-git push origin main v0.1.0
+git tag -a "v${VERSION}" -m "PromptCloak ${VERSION}"
+git push origin main "v${VERSION}"
 ```
 
 Before tagging, keep these versions identical:

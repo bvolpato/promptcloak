@@ -370,7 +370,7 @@ async def test_responses_to_chat_bridge_rewrites_request_and_response() -> None:
         response = await client.post(
             "/v1/responses",
             json={
-                "model": "gpt-5.4",
+                "model": "gpt-5.5",
                 "instructions": "be terse",
                 "stream": False,
                 "input": [{"type": "message", "role": "user", "content": "hello"}],
@@ -415,7 +415,7 @@ async def test_responses_to_chat_bridge_streams_responses_events() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.post(
             "/v1/responses",
-            json={"model": "gpt-5.4", "stream": True, "input": "hello"},
+            json={"model": "gpt-5.5", "stream": True, "input": "hello"},
         )
 
     assert response.status_code == 200
@@ -473,7 +473,7 @@ async def test_responses_to_chat_bridge_maps_chat_tool_calls() -> None:
         response = await client.post(
             "/v1/responses",
             json={
-                "model": "gpt-5.4",
+                "model": "gpt-5.5",
                 "input": "run pwd",
                 "tools": [
                     {
