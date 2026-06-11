@@ -1,0 +1,34 @@
+server:
+  host: 127.0.0.1
+  port: 8000
+  api_key: null
+
+target:
+  default_base_url: https://openrouter.ai/api/v1
+  api_key: null
+  api_key_header: authorization
+  forward_client_authorization: true
+  timeout_seconds: 180
+  allowed_base_urls:
+    - https://openrouter.ai/api/v1
+  block_private_targets: true
+
+redaction:
+  enabled: true
+  engine: detect-secrets
+  redact_mode: full
+  scan_responses: false
+  rules:
+    - type: regex
+      value: "sk-[A-Za-z0-9_-]{20,}"
+      name: "openai-style-token"
+    - type: regex
+      value: "AIza[0-9A-Za-z_-]{35,}"
+      name: "gemini-style-token"
+
+audit:
+  enabled: true
+  file: null
+
+compat:
+  responses_to_chat: true

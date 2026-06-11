@@ -1,0 +1,11 @@
+model = "openai/gpt-oss-120b"
+model_provider = "promptcloak-openrouter"
+model_reasoning_effort = "high"
+
+[model_providers.promptcloak-openrouter]
+name = "PromptCloak OpenRouter"
+base_url = "http://127.0.0.1:8000/v1"
+env_key = "OPENROUTER_API_KEY"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0

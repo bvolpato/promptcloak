@@ -1,0 +1,58 @@
+# Contributing
+
+PromptCloak is local-first security software. Keep changes small, tested, and explicit about privacy impact.
+
+## Setup
+
+```bash
+uv sync --extra dev
+uv run promptcloak doctor
+```
+
+## Checks
+
+```bash
+uv run scripts/audit_secrets.py
+uv run ruff check .
+uv run pytest
+uv build
+```
+
+## Release
+
+Release tags create GitHub releases through `.github/workflows/release.yml`.
+
+```bash
+uv run scripts/check_release.py --tag v0.1.0
+uv run scripts/audit_secrets.py
+uv run ruff check .
+uv run pytest
+uv build
+git tag -a v0.1.0 -m "PromptCloak 0.1.0"
+git push origin main v0.1.0
+```
+
+Before tagging, keep these versions identical:
+
+- `pyproject.toml`
+- `src/promptcloak/version.py`
+- `charts/promptcloak/Chart.yaml`
+
+The release workflow reruns checks, builds source/wheel artifacts, and uploads them to the GitHub release.
+
+## Secret Hygiene
+
+- Do not put real secrets, customer prompts, credentials, or private config in issues, tests, docs, commits, or screenshots.
+- Use split fixture strings like `"sk-" + "FixtureToken..."` when tests need provider-shaped values.
+- Prefer full masking in examples: `[REDACTED_SECRET]`.
+- Run secret audit before opening a pull request.
+
+## Redaction Rules
+
+- Deterministic local rules beat model-based detection.
+- Avoid entropy-only detectors unless false positives are tightly bounded.
+- Tests for new provider patterns must prove full redaction and comma-separated redaction.
+
+## Emergency Request Tracing
+
+`promptcloak serve --debug-requests` logs raw request bodies. Use only with local fixture values.

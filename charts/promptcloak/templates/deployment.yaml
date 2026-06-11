@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "promptcloak.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "promptcloak.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "promptcloak.name" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "promptcloak.name" . }}
+    spec:
+      containers:
+        - name: promptcloak
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.secretEnv }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "promptcloak.fullname" $ }}-secret
+                  key: {{ $key }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

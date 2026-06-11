@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PromptCloak</title>
+    <meta
+      name="description"
+      content="Local OpenAI-compatible proxy and Python library that redacts secrets before prompts leave your machine."
+    />
+    <meta property="og:title" content="PromptCloak" />
+    <meta
+      property="og:description"
+      content="Redact secrets from LLM requests before they leave your machine."
+    />
+    <meta property="og:image" content="https://bvolpato.github.io/promptcloak/hero.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://bvolpato.github.io/promptcloak/hero.png" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="PromptCloak home">
+        <span class="brand-mark">PC</span>
+        <span>PromptCloak</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#install">Install</a>
+        <a href="#proxy">Proxy</a>
+        <a href="#library">Library</a>
+        <a href="#agents">Agents</a>
+        <a href="#security">Security</a>
+        <a href="https://github.com/bvolpato/promptcloak">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Zero-telemetry proxy and library</p>
+          <h1>PromptCloak</h1>
+          <p class="lede">
+            Redact secrets from LLM requests before they leave your machine, as a proxy or Python library.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#install">Start</a>
+            <a class="button secondary" href="#library">Library</a>
+            <a class="button secondary" href="https://github.com/bvolpato/promptcloak">GitHub</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="strip" aria-label="Core guarantees">
+        <div>
+          <strong>Secrets stay local</strong>
+          <span>Request bodies cleaned before forwarding.</span>
+        </div>
+        <div>
+          <strong>Library mode</strong>
+          <span>Filter messages before OpenAI, LiteLLM, or LangChain calls.</span>
+        </div>
+        <div>
+          <strong>Provider agnostic</strong>
+          <span>OpenAI-compatible paths and Anthropic pass-through.</span>
+        </div>
+      </section>
+
+      <section id="install" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Install</p>
+          <h2>One local hop or one import.</h2>
+          <p>
+            Use PromptCloak as a localhost proxy for coding agents, or as an in-process
+            Python filter before direct SDK calls.
+          </p>
+        </div>
+        <div class="code-grid">
+          <pre><code>uv tool install \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.2/promptcloak-0.1.2-py3-none-any.whl
+promptcloak init
+export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+promptcloak serve</code></pre>
+          <pre><code>curl http://127.0.0.1:8000/v1/chat/completions \
+  -d '{"messages":[{"content":".env has sk-..."}]}'</code></pre>
+          <pre><code>from promptcloak import redact_messages
+
+safe = redact_messages([
+  {"role": "user", "content": "API_KEY=&lt;secret&gt;"}
+])</code></pre>
+        </div>
+      </section>
+
+      <section id="proxy" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Proxy mode</p>
+          <h2>OpenAI-compatible forwarding.</h2>
+          <p>
+            PromptCloak forwards any path while redacting JSON/text request bodies first.
+            It supports chat completions, Responses API, legacy completions, models, and
+            Anthropic-compatible pass-through routes.
+          </p>
+        </div>
+        <div class="agent-grid">
+          <article>
+            <h3>Dynamic upstreams</h3>
+            <pre><code>curl :8000/v1/responses \
+  -H "X-Target-Base-URL: https://api.openai.com/v1" \
+  -H "X-Target-API-Key: $OPENAI_API_KEY"</code></pre>
+          </article>
+          <article>
+            <h3>Default config</h3>
+            <pre><code>target:
+  default_base_url: https://openrouter.ai/api/v1
+  api_key: ${OPENROUTER_API_KEY}
+  api_key_header: authorization
+redaction:
+  engine: detect-secrets
+  redact_mode: full</code></pre>
+          </article>
+          <article>
+            <h3>Routes</h3>
+            <pre><code>/v1/chat/completions
+/v1/responses
+/v1/completions
+/v1/models
+/v1/messages</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="library" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Library</p>
+          <h2>Filter SDK calls in-process.</h2>
+          <p>
+            Import PromptCloak helpers when you already call OpenAI, LiteLLM, LangChain,
+            Anthropic, or custom HTTP clients directly.
+          </p>
+        </div>
+        <div class="agent-grid">
+          <article>
+            <h3>OpenAI</h3>
+            <pre><code>from openai import OpenAI
+from promptcloak import redact_messages
+
+client = OpenAI()
+client.chat.completions.create(
+  model="gpt-5.5",
+  messages=redact_messages(messages),
+)</code></pre>
+          </article>
+          <article>
+            <h3>LiteLLM</h3>
+            <pre><code>from litellm import completion
+from promptcloak import redact_params
+
+messages = [{"role": "user", "content": "API_KEY=&lt;secret&gt;"}]
+
+completion(**redact_params(
+  model="openrouter/openai/gpt-5.5",
+  messages=messages,
+))</code></pre>
+          </article>
+          <article>
+            <h3>Responses API</h3>
+            <pre><code>from promptcloak import redact_params
+
+client.responses.create(**redact_params(
+  model="gpt-5.5",
+  input="OPENAI_API_KEY=&lt;secret&gt;",
+))</code></pre>
+          </article>
+          <article>
+            <h3>LangChain</h3>
+            <pre><code>from langchain_openai import ChatOpenAI
+from promptcloak import redact_messages
+
+llm = ChatOpenAI(model="gpt-5.5")
+llm.invoke(redact_messages([
+  ("human", "token=&lt;secret&gt;"),
+]))</code></pre>
+          </article>
+          <article>
+            <h3>Anthropic</h3>
+            <pre><code>from anthropic import Anthropic
+from promptcloak import redact_messages
+
+Anthropic().messages.create(
+  model="claude-opus-4-8",
+  max_tokens=1024,
+  messages=redact_messages(messages),
+)</code></pre>
+          </article>
+          <article>
+            <h3>LlamaIndex</h3>
+            <pre><code>from llama_index.llms.openai import OpenAI
+from promptcloak import redact_messages
+
+llm = OpenAI(model="gpt-5.5")
+llm.chat(redact_messages(messages))</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="agents" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Agent configs</p>
+          <h2>Drop-in setup for coding agents.</h2>
+        </div>
+        <div class="agent-grid">
+          <article>
+            <h3>Codex</h3>
+            <pre><code># ~/.config/promptcloak/config.yaml
+target:
+  forward_client_authorization: true
+
+compat:
+  responses_to_chat: true
+
+# ~/.codex/openrouter-promptcloak.config.toml
+model = "openai/gpt-oss-120b"
+model_provider = "promptcloak-openrouter"
+
+[model_providers.promptcloak-openrouter]
+name = "PromptCloak OpenRouter"
+base_url = "http://127.0.0.1:8000/v1"
+env_key = "OPENROUTER_API_KEY"
+wire_api = "responses"
+request_max_retries = 0
+stream_max_retries = 0
+
+# PromptCloak forwards localhost auth and bridges Responses to Chat.</code></pre>
+          </article>
+          <article>
+            <h3>OpenCode</h3>
+            <pre><code>{
+  "provider": {
+    "promptcloak": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:8000/v1",
+        "headers": {
+          "X-Target-Base-URL": "https://openrouter.ai/api/v1",
+          "X-Target-API-Key": "{env:OPENROUTER_API_KEY}"
+        }
+      }
+    }
+  }
+}</code></pre>
+          </article>
+          <article>
+            <h3>Claude Code</h3>
+            <pre><code>export ANTHROPIC_BASE_URL="http://127.0.0.1:8000"
+export ANTHROPIC_API_KEY="${PROMPTCLOAK_LOCAL_API_KEY:-placeholder}"
+export DISABLE_TELEMETRY=1</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="smoke" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Smoke tests</p>
+          <h2>Verify redaction without trusting model output.</h2>
+          <p>
+            Use an echo target to inspect exactly what upstream receives. Do not ask
+            a model to repeat secrets back as a redaction test.
+          </p>
+        </div>
+        <div class="code-grid single">
+          <pre><code>FAKE_KEY="AI""zaSyFixtureToken000000000000000000000"
+
+curl -fsS http://127.0.0.1:8000/v1/chat/completions \
+  -H "X-Target-Base-URL: https://httpbin.org/anything" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"content":"GEMINI_API_KEY='"$FAKE_KEY"'"}]}' \
+  | jq -r '.json.messages[0].content'</code></pre>
+        </div>
+      </section>
+
+      <section id="deploy" class="section">
+        <div class="section-copy">
+          <p class="eyebrow">Deploy</p>
+          <h2>Local-first, container-ready.</h2>
+          <p>
+            Keep PromptCloak bound to localhost for personal use. If you expose it to a
+            network, set an allowlist and local proxy API key.
+          </p>
+        </div>
+        <div class="agent-grid">
+          <article>
+            <h3>Docker</h3>
+            <pre><code>docker run --rm -p 8000:8000 \
+  -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
+  -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
+  promptcloak:local</code></pre>
+          </article>
+          <article>
+            <h3>Helm</h3>
+            <pre><code>helm install promptcloak ./charts/promptcloak \
+  --set env.PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"</code></pre>
+          </article>
+          <article>
+            <h3>Library only</h3>
+            <pre><code>uv add promptcloak
+
+from promptcloak import redact_payload
+safe_payload = redact_payload(payload)</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section id="security" class="section security">
+        <div>
+          <p class="eyebrow">Security model</p>
+          <h2>Built for local privacy boundaries.</h2>
+        </div>
+        <ul>
+          <li>No telemetry or analytics.</li>
+          <li>Detect-secrets scanner plus deterministic regex rules.</li>
+          <li>Provider fixtures cover GitHub, Atlassian, OpenAI, Gemini, Anthropic, OpenRouter, GitLab, Slack, Stripe, AWS, Google, JWTs, and PEM keys.</li>
+          <li>Partial matching supports tail-only secret rules.</li>
+          <li>AES-GCM encryption for rules at rest.</li>
+          <li>Audit logs store counts and rule names, never secret values.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <span>MIT licensed.</span>
+      <span>No telemetry. No phone-home.</span>
+    </footer>
+  </body>
+</html>

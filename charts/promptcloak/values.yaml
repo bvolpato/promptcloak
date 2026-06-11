@@ -1,0 +1,19 @@
+replicaCount: 1
+
+image:
+  repository: promptcloak
+  tag: "local"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+env:
+  PROMPTCLOAK_HOST: 0.0.0.0
+  PROMPTCLOAK_PORT: "8000"
+  PROMPTCLOAK_TARGET_DEFAULT_BASE_URL: https://openrouter.ai/api/v1
+
+secretEnv: {}
+
+resources: {}

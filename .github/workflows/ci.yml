@@ -1,0 +1,24 @@
+name: ci
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: uv run scripts/check_release.py
+      - run: uv run scripts/audit_secrets.py
+      - run: uv run ruff check .
+      - run: uv run pytest
+      - run: uv build

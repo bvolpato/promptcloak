@@ -1,0 +1,8 @@
+services:
+  promptcloak:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PROMPTCLOAK_TARGET_BASE_URL: https://openrouter.ai/api/v1
+      PROMPTCLOAK_TARGET_API_KEY: ${OPENROUTER_API_KEY}
