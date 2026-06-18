@@ -83,12 +83,13 @@ promptcloak init --target-base-url https://openrouter.ai/api/v1
 ```
 
 Run in foreground with shell env vars, or start as a service after config is ready.
-For service mode, put the upstream key in config or in the service manager env.
+Foreground mode keeps the upstream key in your shell. Service mode requires the key
+to be available to the service process through config or the service manager env.
 
 ```bash
 export OPENROUTER_API_KEY="<openrouter-upstream-key>"
 promptcloak serve
-brew services start promptcloak
+brew services start bvolpato/tap/promptcloak
 ```
 
 ## Install release with uv
@@ -111,6 +112,11 @@ uv run promptcloak doctor
 ## Use as a library
 
 PromptCloak can run without proxy service. Import redaction helpers and filter request values before passing them to any SDK. PromptCloak does not install OpenAI, LiteLLM, LangChain, or Anthropic SDKs; examples assume those are already in your app.
+
+```bash
+uv add \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
+```
 
 ```python
 from promptcloak import redact_messages, scan_messages
@@ -536,22 +542,30 @@ export PROMPTCLOAK_CONFIG_KEY="base64-url-safe-32-byte-key"
 Published image:
 
 ```bash
-docker run --rm -p 127.0.0.1:8000:8000 \
+export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+
+docker run -d --name promptcloak --rm \
+  -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
   ghcr.io/bvolpato/promptcloak:0.1.4
 
 curl -fsS http://127.0.0.1:8000/healthz
+docker stop promptcloak
 ```
 
 Local build:
 
 ```bash
 docker build -t promptcloak:local .
-docker run --rm -p 127.0.0.1:8000:8000 \
+docker run -d --name promptcloak --rm \
+  -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
   promptcloak:local
+
+curl -fsS http://127.0.0.1:8000/healthz
+docker stop promptcloak
 ```
 
 Compose:
@@ -569,7 +583,13 @@ Local chart:
 helm install promptcloak ./charts/promptcloak \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
 
+kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
 kubectl port-forward svc/promptcloak 8000:8000
+```
+
+In another shell:
+
+```bash
 curl -fsS http://127.0.0.1:8000/healthz
 helm uninstall promptcloak
 ```
@@ -596,7 +616,7 @@ helm install promptcloak ./promptcloak-0.1.4.tgz \
 
 ## Security model
 
-PromptCloak protects request bodies before they leave your machine. It cannot protect secrets already sent in upstream auth headers because providers need credentials. Recommended setup:
+PromptCloak protects request bodies before they leave your machine. It masks sensitive auth headers in debug logs, but it cannot remove upstream credentials from provider-bound auth headers because providers need those credentials to authenticate the request. Recommended setup:
 
 - Put upstream provider key in PromptCloak config or env.
 - Keep `forward_client_authorization: false` unless you intentionally want client auth forwarded.
@@ -633,4 +653,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SECURIT
 
 ## Status
 
-PromptCloak ships GitHub releases with source, wheel, Helm chart, Homebrew formula, and GHCR image artifacts. PyPI can be added after the first public usage cycle.
+PromptCloak ships GitHub releases with source, wheel, Helm chart, Homebrew formula, and GHCR image artifacts.
