@@ -13,8 +13,25 @@ from promptcloak.config import DEFAULT_CONFIG_PATH, DEFAULT_KEY_PATH, config_tem
 from promptcloak.proxy import create_app
 from promptcloak.redaction import SecretRedactor
 from promptcloak.security import encrypt_text, load_key, write_key_file
+from promptcloak.version import __version__
 
 app = typer.Typer(help="PromptCloak local secret-redacting LLM proxy.")
+
+
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version."),
+    ] = False,
+) -> None:
+    """Run PromptCloak."""
 
 
 @app.command()
@@ -43,6 +60,11 @@ def serve(
     if debug_requests:
         settings.server.debug_requests = True
     uvicorn.run(create_app(settings), host=settings.server.host, port=settings.server.port)
+
+
+@app.command()
+def version() -> None:
+    typer.echo(__version__)
 
 
 @app.command()

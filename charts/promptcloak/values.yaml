@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: promptcloak
-  tag: "local"
+  repository: ghcr.io/bvolpato/promptcloak
+  tag: "0.1.4"
   pullPolicy: IfNotPresent
 
 service:

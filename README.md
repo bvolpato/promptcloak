@@ -14,8 +14,8 @@ Repository: `https://github.com/bvolpato/promptcloak`
 ## 60-second demo
 
 ```bash
-uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.3/promptcloak-0.1.3-py3-none-any.whl
+brew tap bvolpato/tap
+brew install promptcloak
 promptcloak init
 export OPENROUTER_API_KEY="<upstream-provider-key>"
 promptcloak serve
@@ -73,6 +73,32 @@ GEMINI_API_KEY=[REDACTED_SECRET]
 
 PromptCloak audit logs include counts and rule names, never secret values.
 
+## Install with Homebrew
+
+```bash
+brew tap bvolpato/tap
+brew install promptcloak
+promptcloak version
+promptcloak init --target-base-url https://openrouter.ai/api/v1
+```
+
+Run in foreground with shell env vars, or start as a service after config is ready.
+For service mode, put the upstream key in config or in the service manager env.
+
+```bash
+export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+promptcloak serve
+brew services start promptcloak
+```
+
+## Install release with uv
+
+```bash
+uv tool install \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
+promptcloak doctor
+```
+
 ## Install from source
 
 ```bash
@@ -80,14 +106,6 @@ git clone https://github.com/bvolpato/promptcloak.git
 cd promptcloak
 uv sync --extra dev
 uv run promptcloak doctor
-```
-
-## Install release
-
-```bash
-uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.3/promptcloak-0.1.3-py3-none-any.whl
-promptcloak doctor
 ```
 
 ## Use as a library
@@ -515,19 +533,64 @@ export PROMPTCLOAK_CONFIG_KEY="base64-url-safe-32-byte-key"
 
 ## Docker
 
+Published image:
+
 ```bash
-docker build -t promptcloak .
-docker run --rm -p 8000:8000 \
+docker run --rm -p 127.0.0.1:8000:8000 \
+  -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
+  -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
+  ghcr.io/bvolpato/promptcloak:0.1.4
+
+curl -fsS http://127.0.0.1:8000/healthz
+```
+
+Local build:
+
+```bash
+docker build -t promptcloak:local .
+docker run --rm -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
   promptcloak:local
 ```
 
+Compose:
+
+```bash
+export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+docker compose up --build
+```
+
 ## Helm
+
+Local chart:
 
 ```bash
 helm install promptcloak ./charts/promptcloak \
-  --set env.PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+
+kubectl port-forward svc/promptcloak 8000:8000
+curl -fsS http://127.0.0.1:8000/healthz
+helm uninstall promptcloak
+```
+
+Use locally built images in Kind:
+
+```bash
+docker build -t promptcloak:local .
+kind load docker-image promptcloak:local
+helm install promptcloak ./charts/promptcloak \
+  --set image.repository=promptcloak \
+  --set image.tag=local \
+  --set image.pullPolicy=Never \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+```
+
+Release asset:
+
+```bash
+helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4.tgz
+helm install promptcloak ./promptcloak-0.1.4.tgz \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
 ```
 
@@ -570,4 +633,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SECURIT
 
 ## Status
 
-PromptCloak ships GitHub releases with source and wheel artifacts. Homebrew, official container images, and PyPI can be added after the first public usage cycle.
+PromptCloak ships GitHub releases with source, wheel, Helm chart, Homebrew formula, and GHCR image artifacts. PyPI can be added after the first public usage cycle.

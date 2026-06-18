@@ -8,6 +8,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,9 +19,13 @@ jobs:
         with:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
+      - uses: azure/setup-helm@v4
       - run: uv sync --extra dev
       - run: uv run scripts/check_release.py
       - run: uv run scripts/audit_secrets.py
       - run: uv run ruff check .
       - run: uv run pytest
       - run: uv build
+      - run: helm lint ./charts/promptcloak
+      - run: docker build -t promptcloak:ci .
+      - run: docker run --rm --entrypoint promptcloak promptcloak:ci version
