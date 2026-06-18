@@ -489,12 +489,15 @@ Tests cover fake tokens shaped like:
 - Anthropic API keys
 - OpenRouter keys
 - GitLab, Slack, Stripe, AWS, Google API keys
+- 1Password, Databricks, DigitalOcean, Hugging Face, Linear, npm, PyPI, SendGrid, Telegram, Twilio, Vault, Shopify, Sentry
 - JWTs
 - PEM private keys
+- Authorization-style headers and URL credentials in request bodies
 - `password=...`, `token=...`, `api_key=...`
 - User exact-tail and regex rules
 
-Every scan is local. PromptCloak never calls an LLM to detect secrets.
+Every scan is local. PromptCloak never calls an LLM to detect secrets. Entropy-only
+matching is intentionally disabled; use custom rules for opaque internal formats.
 
 ## Encrypt rules at rest
 
@@ -540,6 +543,7 @@ PromptCloak protects request bodies before they leave your machine. It cannot pr
 - Keep `block_private_targets: true`.
 - Set `allowed_base_urls` in shared/team installs.
 - Keep response scanning off unless you need it; streaming response redaction is intentionally not attempted yet.
+- Add custom rules for internal tokens or providers without stable public prefixes.
 - In library mode, call `redact_messages`, `redact_params`, or `redact_payload` before SDK calls.
 
 ## Emergency request tracing

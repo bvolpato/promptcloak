@@ -21,7 +21,8 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - PromptCloak protects request bodies before forwarding. It cannot protect credentials intentionally used as upstream authentication.
 - Emergency request tracing can print raw request bodies locally.
 - Streaming response redaction is intentionally not attempted.
-- Detection quality depends on known provider formats, assignment patterns, and configured tail/regex rules.
+- Detection quality depends on known provider formats, labeled values, connection-string shapes, and configured tail/regex rules.
+- Entropy-only matching is disabled to avoid unpredictable false positives.
 
 ## Recommended Defaults
 
@@ -31,3 +32,4 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - Set `target.allowed_base_urls` when shared by teams.
 - Store only secret tails in custom rules.
 - Use full redaction mode.
+- Add custom regex or tail rules for private/internal token formats.

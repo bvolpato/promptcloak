@@ -1,6 +1,6 @@
 from promptcloak.config import RedactionConfig, RuleConfig
 from promptcloak.redaction import SecretRedactor
-from tests.fixtures import OPENAI_FAKE, PROVIDER_FIXTURES
+from tests.fixtures import EXPANDED_PROVIDER_FIXTURES, OPENAI_FAKE, PROVIDER_FIXTURES
 
 
 def test_redacts_nested_openai_key() -> None:
@@ -30,6 +30,49 @@ def test_provider_api_keys_are_redacted() -> None:
     for value in PROVIDER_FIXTURES.values():
         assert value not in result.value
     assert result.stats.redactions >= len(PROVIDER_FIXTURES)
+
+
+def test_expanded_provider_tokens_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    text = "\n".join(
+        f"{name}={value}" for name, value in EXPANDED_PROVIDER_FIXTURES.items()
+    )
+
+    result = redactor.redact_text(text)
+
+    for value in EXPANDED_PROVIDER_FIXTURES.values():
+        assert value not in result.value
+    assert result.stats.redactions >= len(EXPANDED_PROVIDER_FIXTURES)
+
+
+def test_prefixed_labeled_unknown_secret_is_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    unknown_token = "opaque-provider-token-without-known-prefix"
+
+    result = redactor.redact_text(f"CLOUDFLARE_API_KEY={unknown_token}")
+
+    assert unknown_token not in result.value
+    assert result.value == "CLOUDFLARE_API_KEY=[REDACTED_SECRET]"
+
+
+def test_authorization_header_value_is_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    bearer = "opaqueBearerTokenWithoutKnownPrefix"
+
+    result = redactor.redact_text(f"Authorization: Bearer {bearer}")
+
+    assert bearer not in result.value
+    assert result.value == "Authorization: Bearer [REDACTED_SECRET]"
+
+
+def test_connection_string_password_is_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    password = "db-password-without-known-prefix"
+
+    result = redactor.redact_text(f"postgresql://user:{password}@localhost/app")
+
+    assert password not in result.value
+    assert result.value == "postgresql://user:[REDACTED_SECRET]@localhost/app"
 
 
 def test_comma_separated_provider_api_keys_are_redacted() -> None:
