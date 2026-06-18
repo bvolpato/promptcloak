@@ -41,12 +41,18 @@
           <p class="eyebrow">Zero-telemetry proxy and library</p>
           <h1>PromptCloak</h1>
           <p class="lede">
-            Redact secrets from LLM requests before they leave your machine, as a proxy or Python library.
+            Redact secrets from LLM requests before they leave your machine, as a proxy
+            or Python library.
           </p>
           <div class="actions">
             <a class="button primary" href="#install">Start</a>
             <a class="button secondary" href="#library">Library</a>
             <a class="button secondary" href="https://github.com/bvolpato/promptcloak">GitHub</a>
+          </div>
+          <div class="hero-facts" aria-label="Project guarantees">
+            <span>Local scan</span>
+            <span>No telemetry</span>
+            <span>OpenAI-compatible</span>
           </div>
         </div>
       </section>
@@ -66,6 +72,29 @@
         </div>
       </section>
 
+      <section class="quickstart" aria-label="Quick redaction demo">
+        <div>
+          <p class="eyebrow">Fast path</p>
+          <h2>Install, run, verify.</h2>
+          <p>
+            Start locally, point your agent at <code>127.0.0.1:8000</code>, and use an echo target
+            to confirm upstream receives only redacted content.
+          </p>
+        </div>
+        <pre><code>brew tap bvolpato/tap
+brew install promptcloak
+promptcloak init
+export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+promptcloak serve</code></pre>
+        <pre><code>FAKE_KEY="AI""zaSyFixtureToken000000000000000000000"
+curl -fsS http://127.0.0.1:8000/v1/chat/completions \
+  -H "X-Target-Base-URL: https://httpbin.org/anything" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"content":"GEMINI_API_KEY='"$FAKE_KEY"'"}]}'
+
+# upstream body: GEMINI_API_KEY=[REDACTED_SECRET]</code></pre>
+      </section>
+
       <section id="install" class="section">
         <div class="section-copy">
           <p class="eyebrow">Install</p>
@@ -82,6 +111,7 @@ promptcloak init
 export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
 promptcloak serve</code></pre>
           <pre><code>curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
   -d '{"messages":[{"content":".env has sk-..."}]}'</code></pre>
           <pre><code>from promptcloak import redact_messages
 
@@ -104,7 +134,7 @@ safe = redact_messages([
         <div class="agent-grid">
           <article>
             <h3>Dynamic upstreams</h3>
-            <pre><code>curl :8000/v1/responses \
+            <pre><code>curl http://127.0.0.1:8000/v1/responses \
   -H "X-Target-Base-URL: https://api.openai.com/v1" \
   -H "X-Target-API-Key: $OPENAI_API_KEY"</code></pre>
           </article>
@@ -290,7 +320,8 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
         <div class="agent-grid">
           <article>
             <h3>Docker</h3>
-            <pre><code>docker run --rm -p 127.0.0.1:8000:8000 \
+            <pre><code>docker run -d --name promptcloak --rm \
+  -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
   ghcr.io/bvolpato/promptcloak:0.1.4
@@ -299,9 +330,11 @@ curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
             <h3>Helm</h3>
-            <pre><code>helm install promptcloak ./charts/promptcloak \
+            <pre><code>helm install promptcloak \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4.tgz \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
 
+kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
 kubectl port-forward svc/promptcloak 8000:8000
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
@@ -319,6 +352,31 @@ promptcloak version</code></pre>
 from promptcloak import redact_payload
 safe_payload = redact_payload(payload)</code></pre>
           </article>
+        </div>
+      </section>
+
+      <section class="coverage section">
+        <div>
+          <p class="eyebrow">Coverage</p>
+          <h2>Common secrets caught by default.</h2>
+          <p>
+            Deterministic patterns cover provider keys, personal access tokens, JWTs,
+            PEM blocks, URL credentials, and assignment-style secrets.
+          </p>
+        </div>
+        <div class="token-grid" aria-label="Covered secret families">
+          <span>GitHub PATs</span>
+          <span>Atlassian</span>
+          <span>OpenAI</span>
+          <span>Gemini</span>
+          <span>Anthropic</span>
+          <span>OpenRouter</span>
+          <span>AWS</span>
+          <span>Slack</span>
+          <span>Stripe</span>
+          <span>JWTs</span>
+          <span>PEM keys</span>
+          <span>Custom rules</span>
         </div>
       </section>
 

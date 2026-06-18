@@ -10,6 +10,7 @@
   --blue: #7ab7ff;
   --gold: #f2c56b;
   --red: #f17878;
+  --violet: #bca7ff;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
@@ -27,6 +28,10 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  background:
+    linear-gradient(180deg, rgba(84, 214, 160, 0.06), transparent 24rem),
+    linear-gradient(135deg, rgba(122, 183, 255, 0.08), transparent 36rem),
+    var(--bg);
 }
 
 a {
@@ -37,6 +42,20 @@ a {
 code,
 pre {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+code:not(pre code) {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  padding: 0.08rem 0.32rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
 }
 
 .site-header {
@@ -83,11 +102,21 @@ nav a:hover {
   color: var(--text);
 }
 
+nav a,
+.button,
+article {
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
 .hero {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  min-height: calc(88vh - 72px);
+  min-height: clamp(620px, calc(88vh - 72px), 780px);
   display: flex;
   align-items: center;
   padding: clamp(36px, 7vw, 84px) clamp(20px, 5vw, 72px);
@@ -181,12 +210,42 @@ h3 {
   color: var(--text);
 }
 
+.button:hover {
+  transform: translateY(-1px);
+}
+
+.secondary:hover {
+  border-color: rgba(122, 183, 255, 0.66);
+  background: rgba(122, 183, 255, 0.08);
+}
+
+.hero-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.hero-facts span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: rgba(10, 13, 18, 0.54);
+}
+
 pre {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(122, 183, 255, 0.24);
   border-radius: 8px;
-  background: #0a0d12;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 46px),
+    #0a0d12;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
 }
 
@@ -197,6 +256,11 @@ pre {
   color: #d7e7ff;
   line-height: 1.65;
   white-space: pre;
+}
+
+pre code {
+  display: block;
+  min-width: max-content;
 }
 
 .strip {
@@ -239,6 +303,24 @@ li {
   border-bottom: 1px solid var(--line);
 }
 
+.quickstart {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1fr) minmax(0, 1.18fr);
+  gap: clamp(18px, 3vw, 28px);
+  align-items: stretch;
+  padding: clamp(34px, 6vw, 64px) clamp(20px, 5vw, 72px);
+  border-bottom: 1px solid var(--line);
+  background: #101612;
+}
+
+.quickstart h2 {
+  font-size: clamp(1.8rem, 3.2vw, 2.8rem);
+}
+
+.quickstart pre {
+  align-self: stretch;
+}
+
 .section-copy {
   max-width: 560px;
 }
@@ -266,7 +348,26 @@ article {
   padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 70px),
+    var(--panel);
+}
+
+article:hover {
+  border-color: rgba(122, 183, 255, 0.44);
+  transform: translateY(-1px);
+}
+
+article:nth-child(3n + 1) {
+  border-top-color: rgba(84, 214, 160, 0.72);
+}
+
+article:nth-child(3n + 2) {
+  border-top-color: rgba(122, 183, 255, 0.72);
+}
+
+article:nth-child(3n) {
+  border-top-color: rgba(242, 197, 107, 0.72);
 }
 
 article pre {
@@ -278,7 +379,30 @@ article pre {
 
 .security {
   align-items: start;
-  background: var(--panel-2);
+  background:
+    linear-gradient(180deg, rgba(84, 214, 160, 0.07), transparent 22rem),
+    var(--panel-2);
+}
+
+.coverage {
+  background: #101512;
+}
+
+.token-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  align-self: start;
+}
+
+.token-grid span {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-weight: 700;
 }
 
 ul {
@@ -308,6 +432,7 @@ footer {
   .hero,
   .section,
   .strip,
+  .quickstart,
   .agent-grid {
     grid-template-columns: 1fr;
   }
@@ -315,6 +440,10 @@ footer {
   .hero {
     min-height: 76vh;
     background-position: 58% center;
+  }
+
+  .quickstart pre {
+    align-self: auto;
   }
 
   .strip div {
@@ -330,7 +459,7 @@ footer {
 @media (max-width: 560px) {
   nav {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   h1 {
@@ -339,6 +468,22 @@ footer {
 
   pre {
     padding: 16px;
+    font-size: 0.82rem;
+  }
+
+  .hero {
+    min-height: 68vh;
+    padding-top: 72px;
+    background-position: 62% center;
+  }
+
+  .hero-facts {
+    gap: 8px;
+  }
+
+  .hero-facts span {
+    min-height: 30px;
+    padding: 0 10px;
     font-size: 0.82rem;
   }
 }
