@@ -15,7 +15,7 @@ Repository: `https://github.com/bvolpato/promptcloak`
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.2/promptcloak-0.1.2-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.3/promptcloak-0.1.3-py3-none-any.whl
 promptcloak init
 export OPENROUTER_API_KEY="<upstream-provider-key>"
 promptcloak serve
@@ -86,7 +86,7 @@ uv run promptcloak doctor
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.2/promptcloak-0.1.2-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.3/promptcloak-0.1.3-py3-none-any.whl
 promptcloak doctor
 ```
 
