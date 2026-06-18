@@ -76,8 +76,8 @@
           </p>
         </div>
         <div class="code-grid">
-          <pre><code>uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.3/promptcloak-0.1.3-py3-none-any.whl
+          <pre><code>brew tap bvolpato/tap
+brew install promptcloak
 promptcloak init
 export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
 promptcloak serve</code></pre>
@@ -290,20 +290,31 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
         <div class="agent-grid">
           <article>
             <h3>Docker</h3>
-            <pre><code>docker run --rm -p 8000:8000 \
+            <pre><code>docker run --rm -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
-  promptcloak:local</code></pre>
+  ghcr.io/bvolpato/promptcloak:0.1.4
+
+curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
             <h3>Helm</h3>
             <pre><code>helm install promptcloak ./charts/promptcloak \
-  --set env.PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"</code></pre>
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+
+kubectl port-forward svc/promptcloak 8000:8000
+curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
-            <h3>Library only</h3>
-            <pre><code>uv add promptcloak
+            <h3>Homebrew</h3>
+            <pre><code>brew tap bvolpato/tap
+brew install promptcloak
+promptcloak version</code></pre>
+          </article>
+          <article>
+            <h3>Library</h3>
+            <pre><code>uv add \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
 
 from promptcloak import redact_payload
 safe_payload = redact_payload(payload)</code></pre>
