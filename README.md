@@ -1,8 +1,8 @@
 # PromptCloak
 
-**Local OpenAI-compatible proxy and Python library that redacts secrets before prompts leave your machine.**
+**Run LLM requests through a local secret scrubber before they leave your machine.**
 
-PromptCloak can sit between coding agents, SDKs, or apps and any OpenAI-compatible backend. It can also run in-process as a small Python filter. It scans values locally, redacts API keys, passwords, tokens, private keys, JWTs, and custom rules, then forwards or returns cleaned payloads.
+PromptCloak is an OpenAI-compatible proxy and Python library for removing secrets from prompts. It scans request values locally, replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches, then forwards or returns cleaned payloads.
 
 No telemetry. No phone-home. No full-secret storage required.
 
@@ -82,13 +82,16 @@ promptcloak version
 promptcloak init --target-base-url https://openrouter.ai/api/v1
 ```
 
-Run in foreground with shell env vars, or start as a service after config is ready.
-Foreground mode keeps the upstream key in your shell. Service mode requires the key
-to be available to the service process through config or the service manager env.
+Foreground mode keeps the upstream key in your shell:
 
 ```bash
 export OPENROUTER_API_KEY="<openrouter-upstream-key>"
 promptcloak serve
+```
+
+Service mode needs the upstream key in config or service-manager env:
+
+```bash
 brew services start bvolpato/tap/promptcloak
 ```
 
@@ -96,7 +99,7 @@ brew services start bvolpato/tap/promptcloak
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5-py3-none-any.whl
 promptcloak doctor
 ```
 
@@ -115,7 +118,7 @@ PromptCloak can run without proxy service. Import redaction helpers and filter r
 
 ```bash
 uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5-py3-none-any.whl
 ```
 
 ```python
@@ -502,9 +505,9 @@ PromptCloak forwards `/v1/messages` to configured upstream. It does not translat
 
 ## Redaction Engine
 
-PromptCloak uses `bc-detect-secrets` directly, plus local deterministic rules for provider tokens and user-defined exact-tail or regex matches. It does not depend on any model runtime.
+PromptCloak uses `bc-detect-secrets` directly, plus deterministic rules for provider tokens and user-defined exact-tail or regex matches. No model runtime involved.
 
-Tests cover fake tokens shaped like:
+Coverage includes fixture-shaped examples for:
 
 - GitHub classic and fine-grained PATs
 - Atlassian API tokens
@@ -552,7 +555,7 @@ docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.4
+  ghcr.io/bvolpato/promptcloak:0.1.5
 
 curl -fsS http://127.0.0.1:8000/healthz
 docker stop promptcloak
@@ -613,8 +616,8 @@ helm install promptcloak ./charts/promptcloak \
 Release asset:
 
 ```bash
-helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4.tgz
-helm install promptcloak ./promptcloak-0.1.4.tgz \
+helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5.tgz
+helm install promptcloak ./promptcloak-0.1.5.tgz \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
 ```
 
@@ -648,13 +651,13 @@ uv build
 uv run promptcloak scan 'OPENAI_API_KEY=<api-key-like-value>'
 ```
 
-Test coverage includes unit and e2e fixtures for nested OpenAI/Responses/Claude-style
-payloads, dynamic upstream headers, audit logs, emergency tracing, response scanning,
-target allowlists, text bodies, and provider-shaped fake tokens. Fixtures are split in
-source so no real or contiguous fake keys are committed.
+Tests cover nested OpenAI, Responses, and Claude-style payloads, dynamic upstream
+headers, audit logs, emergency tracing, response scanning, target allowlists, text
+bodies, and provider-shaped fixture tokens. Fixtures are split in source so no real or
+contiguous fake keys are committed.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SECURITY_AUDIT.md](SECURITY_AUDIT.md) before opening issues or pull requests. Never post real secrets in public project surfaces.
 
-## Status
+## Distribution
 
 PromptCloak ships GitHub releases with source, wheel, Helm chart, Homebrew formula, and GHCR image artifacts.

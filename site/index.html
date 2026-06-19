@@ -6,12 +6,12 @@
     <title>PromptCloak</title>
     <meta
       name="description"
-      content="Local OpenAI-compatible proxy and Python library that redacts secrets before prompts leave your machine."
+      content="Local OpenAI-compatible proxy and Python library for redacting secrets before prompts leave your machine."
     />
     <meta property="og:title" content="PromptCloak" />
     <meta
       property="og:description"
-      content="Redact secrets from LLM requests before they leave your machine."
+      content="Redact keys, tokens, private keys, signed URLs, and custom rules before LLM requests leave your machine."
     />
     <meta property="og:image" content="https://bvolpato.github.io/promptcloak/hero.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -38,11 +38,12 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">Zero-telemetry proxy and library</p>
+          <p class="eyebrow">Local secret redaction</p>
           <h1>PromptCloak</h1>
           <p class="lede">
-            Redact secrets from LLM requests before they leave your machine, as a proxy
-            or Python library.
+            Run a small proxy or Python filter before your LLM backend. PromptCloak
+            removes keys, tokens, passwords, private keys, and signed URLs from request
+            bodies before they leave your machine.
           </p>
           <div class="actions">
             <a class="button primary" href="#install">Start</a>
@@ -50,9 +51,9 @@
             <a class="button secondary" href="https://github.com/bvolpato/promptcloak">GitHub</a>
           </div>
           <div class="hero-facts" aria-label="Project guarantees">
-            <span>Local scan</span>
+            <span>Local only</span>
             <span>No telemetry</span>
-            <span>OpenAI-compatible</span>
+            <span>Proxy or library</span>
           </div>
         </div>
       </section>
@@ -60,25 +61,25 @@
       <section class="strip" aria-label="Core guarantees">
         <div>
           <strong>Secrets stay local</strong>
-          <span>Request bodies cleaned before forwarding.</span>
+          <span>Request bodies are cleaned before forwarding.</span>
         </div>
         <div>
           <strong>Library mode</strong>
-          <span>Filter messages before OpenAI, LiteLLM, or LangChain calls.</span>
+          <span>Filter messages before SDK calls.</span>
         </div>
         <div>
           <strong>Provider agnostic</strong>
-          <span>OpenAI-compatible paths and Anthropic pass-through.</span>
+          <span>OpenAI-compatible routes and Anthropic pass-through.</span>
         </div>
       </section>
 
       <section class="quickstart" aria-label="Quick redaction demo">
         <div>
-          <p class="eyebrow">Fast path</p>
-          <h2>Install, run, verify.</h2>
+          <p class="eyebrow">Verify</p>
+          <h2>See what upstream receives.</h2>
           <p>
-            Start locally, point your agent at <code>127.0.0.1:8000</code>, and use an echo target
-            to confirm upstream receives only redacted content.
+            Start locally, point your client at <code>127.0.0.1:8000</code>, and use an
+            echo target for redaction checks. Model replies are not reliable evidence.
           </p>
         </div>
         <pre><code>brew tap bvolpato/tap
@@ -98,10 +99,10 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
       <section id="install" class="section">
         <div class="section-copy">
           <p class="eyebrow">Install</p>
-          <h2>One local hop or one import.</h2>
+          <h2>Install once. Point clients at localhost.</h2>
           <p>
-            Use PromptCloak as a localhost proxy for coding agents, or as an in-process
-            Python filter before direct SDK calls.
+            Use PromptCloak as a local proxy for agents, or import it before direct SDK
+            calls.
           </p>
         </div>
         <div class="code-grid">
@@ -124,11 +125,10 @@ safe = redact_messages([
       <section id="proxy" class="section">
         <div class="section-copy">
           <p class="eyebrow">Proxy mode</p>
-          <h2>OpenAI-compatible forwarding.</h2>
+          <h2>Forward without reshaping requests.</h2>
           <p>
-            PromptCloak forwards any path while redacting JSON/text request bodies first.
-            It supports chat completions, Responses API, legacy completions, models, and
-            Anthropic-compatible pass-through routes.
+            PromptCloak redacts JSON and text bodies, then forwards the original route
+            and provider-specific fields.
           </p>
         </div>
         <div class="agent-grid">
@@ -162,10 +162,10 @@ redaction:
       <section id="library" class="section">
         <div class="section-copy">
           <p class="eyebrow">Library</p>
-          <h2>Filter SDK calls in-process.</h2>
+          <h2>Use it in-process.</h2>
           <p>
-            Import PromptCloak helpers when you already call OpenAI, LiteLLM, LangChain,
-            Anthropic, or custom HTTP clients directly.
+            Import PromptCloak helpers before OpenAI, LiteLLM, LangChain, Anthropic, or
+            custom HTTP client calls.
           </p>
         </div>
         <div class="agent-grid">
@@ -236,7 +236,7 @@ llm.chat(redact_messages(messages))</code></pre>
       <section id="agents" class="section">
         <div class="section-copy">
           <p class="eyebrow">Agent configs</p>
-          <h2>Drop-in setup for coding agents.</h2>
+          <h2>Agent configs stay plain.</h2>
         </div>
         <div class="agent-grid">
           <article>
@@ -291,7 +291,7 @@ export DISABLE_TELEMETRY=1</code></pre>
       <section id="smoke" class="section">
         <div class="section-copy">
           <p class="eyebrow">Smoke tests</p>
-          <h2>Verify redaction without trusting model output.</h2>
+          <h2>Do not ask a model to echo secrets.</h2>
           <p>
             Use an echo target to inspect exactly what upstream receives. Do not ask
             a model to repeat secrets back as a redaction test.
@@ -311,7 +311,7 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
       <section id="deploy" class="section">
         <div class="section-copy">
           <p class="eyebrow">Deploy</p>
-          <h2>Local-first, container-ready.</h2>
+          <h2>Keep it local unless you mean to share it.</h2>
           <p>
             Keep PromptCloak bound to localhost for personal use. If you expose it to a
             network, set an allowlist and local proxy API key.
@@ -324,14 +324,14 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
   -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.4
+  ghcr.io/bvolpato/promptcloak:0.1.5
 
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
             <h3>Helm</h3>
             <pre><code>helm install promptcloak \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4.tgz \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5.tgz \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
@@ -347,7 +347,7 @@ promptcloak version</code></pre>
           <article>
             <h3>Library</h3>
             <pre><code>uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.4/promptcloak-0.1.4-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5-py3-none-any.whl
 
 from promptcloak import redact_payload
 safe_payload = redact_payload(payload)</code></pre>
@@ -358,7 +358,7 @@ safe_payload = redact_payload(payload)</code></pre>
       <section class="coverage section">
         <div>
           <p class="eyebrow">Coverage</p>
-          <h2>Common secrets caught by default.</h2>
+          <h2>Credential families covered by tests.</h2>
           <p>
             Deterministic patterns cover provider keys, personal access tokens, JWTs,
             signed URLs, private key blocks, URL credentials, and assignment-style secrets.
@@ -392,13 +392,13 @@ safe_payload = redact_payload(payload)</code></pre>
       <section id="security" class="section security">
         <div>
           <p class="eyebrow">Security model</p>
-          <h2>Built for local privacy boundaries.</h2>
+          <h2>Small privacy boundary.</h2>
         </div>
         <ul>
           <li>No telemetry or analytics.</li>
-          <li>Detect-secrets scanner plus deterministic regex rules.</li>
-          <li>Provider fixtures cover GitHub, Atlassian, OpenAI, Gemini, Anthropic, OpenRouter, GitLab, Slack, Stripe, AWS, Google, JWTs, and PEM keys.</li>
-          <li>Partial matching supports tail-only secret rules.</li>
+          <li>Deterministic regex rules plus detect-secrets, with entropy-only matching disabled.</li>
+          <li>Tests cover provider keys, Cloudflare headers, signed URLs, JWTs, PEM/PGP keys, and custom fields.</li>
+          <li>Tail-only rules cover internal formats without storing full secrets.</li>
           <li>AES-GCM encryption for rules at rest.</li>
           <li>Audit logs store counts and rule names, never secret values.</li>
         </ul>
