@@ -361,7 +361,7 @@ safe_payload = redact_payload(payload)</code></pre>
           <h2>Common secrets caught by default.</h2>
           <p>
             Deterministic patterns cover provider keys, personal access tokens, JWTs,
-            PEM blocks, URL credentials, and assignment-style secrets.
+            signed URLs, private key blocks, URL credentials, and assignment-style secrets.
           </p>
         </div>
         <div class="token-grid" aria-label="Covered secret families">
@@ -371,7 +371,16 @@ safe_payload = redact_payload(payload)</code></pre>
           <span>Gemini</span>
           <span>Anthropic</span>
           <span>OpenRouter</span>
+          <span>Z.AI</span>
+          <span>MiniMax</span>
+          <span>DeepSeek</span>
+          <span>Codex</span>
+          <span>Grok/xAI</span>
+          <span>Fireworks</span>
+          <span>Cloudflare</span>
           <span>AWS</span>
+          <span>Signed URLs</span>
+          <span>PGP keys</span>
           <span>Slack</span>
           <span>Stripe</span>
           <span>JWTs</span>
