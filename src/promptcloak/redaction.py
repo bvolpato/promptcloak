@@ -13,11 +13,23 @@ from promptcloak.config import RedactionConfig, RuleConfig
 
 MASK = "[REDACTED_SECRET]"
 
+SENSITIVE_FIELD_RE = re.compile(
+    r"(?i)(?:^|[_.-])(?:api[_-]?keys?|client[_-]?secrets?|secrets?|passwords?|passwd|"
+    r"pwd|tokens?|access[_-]?tokens?|refresh[_-]?tokens?|id[_-]?tokens?|auth|"
+    r"authorization|auth[_-]?tokens?|session[_-]?tokens?|private[_-]?keys?|"
+    r"credentials?|webhook[_-]?urls?|x[_-]?api[_-]?key|api[_-]?key|x[_-]?auth[_-]?key|"
+    r"x[_-]?auth[_-]?token|cf[_-]?access[_-]?token|cloudflare[_-]?api[_-]?"
+    r"(?:key|token)|signed[_-]?urls?|presigned[_-]?urls?|sas[_-]?tokens?|"
+    r"dockerconfigjson|signature|sig)(?:$|[_.-])"
+)
 
 BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b")),
     ("openrouter_key", re.compile(r"\bsk-or-v1-[A-Za-z0-9_-]{20,}\b")),
+    ("minimax_key", re.compile(r"\bsk-cp-[A-Za-z0-9_-]{20,}\b")),
     ("openai_key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
+    ("fireworks_key", re.compile(r"\bfw_[A-Za-z0-9_-]{20,}\b")),
+    ("xai_key", re.compile(r"\bxai-[A-Za-z0-9_-]{20,}\b")),
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{30,}\b")),
     ("github_fine_grained_pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{30,}\b")),
     ("atlassian_api_token", re.compile(r"\bATATT3xFfGF0[A-Za-z0-9_-]{20,}\b")),
@@ -51,8 +63,23 @@ BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "private_key",
         re.compile(
-            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]+?-----END "
-            r"(?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
+            r"[\s\S]+?-----END (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
+        ),
+    ),
+    (
+        "pgp_private_key",
+        re.compile(
+            r"-----BEGIN PGP " r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
+            r"PRIVATE KEY BLOCK-----"
+        ),
+    ),
+    (
+        "signed_url_query_param",
+        re.compile(
+            r"(?i)([?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|"
+            r"x-goog-signature|x-goog-credential|googleaccessid|signature|sig)=)"
+            r"([^&#\s]+)"
         ),
     ),
     (
@@ -68,7 +95,8 @@ BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "auth_header",
         re.compile(
-            r"(?i)\b((?:authorization|proxy-authorization|x-api-key|api-key|x-auth-token)"
+            r"(?i)\b((?:authorization|proxy-authorization|x-api-key|api-key|x-auth-token|"
+            r"x-auth-key|cf-access-token)"
             r"\s*[:=]\s*(?:(?:bearer|token|basic|key)\s+)?)([A-Za-z0-9._~+/=-]{8,})"
         ),
     ),
@@ -142,7 +170,33 @@ class SecretRedactor:
         if isinstance(value, tuple):
             return tuple(self._walk(item, stats) for item in value)
         if isinstance(value, Mapping):
-            return {key: self._walk(item, stats) for key, item in value.items()}
+            return {
+                key: (
+                    self._redact_sensitive_field(item, stats)
+                    if self._is_sensitive_field(key)
+                    else self._walk(item, stats)
+                )
+                for key, item in value.items()
+            }
+        return value
+
+    def _is_sensitive_field(self, key: Any) -> bool:
+        if not isinstance(key, str):
+            return False
+        return SENSITIVE_FIELD_RE.search(key) is not None
+
+    def _redact_sensitive_field(self, value: Any, stats: RedactionStats) -> Any:
+        if isinstance(value, str):
+            if len(value.strip()) < 8:
+                return value
+            stats.add("sensitive_field", 1)
+            return self.placeholder
+        if isinstance(value, list):
+            return [self._redact_sensitive_field(item, stats) for item in value]
+        if isinstance(value, tuple):
+            return tuple(self._redact_sensitive_field(item, stats) for item in value)
+        if isinstance(value, Mapping):
+            return {key: self._redact_sensitive_field(item, stats) for key, item in value.items()}
         return value
 
     def _redact_string(self, value: str, stats: RedactionStats) -> str:
@@ -218,6 +272,8 @@ class SecretRedactor:
                 value,
             )
         if name == "auth_header":
+            return pattern.subn(lambda match: f"{match.group(1)}{self.placeholder}", value)
+        if name == "signed_url_query_param":
             return pattern.subn(lambda match: f"{match.group(1)}{self.placeholder}", value)
         if name == "url_credentials":
             return pattern.subn(

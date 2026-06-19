@@ -45,6 +45,94 @@ def test_expanded_provider_tokens_are_redacted() -> None:
     assert result.stats.redactions >= len(EXPANDED_PROVIDER_FIXTURES)
 
 
+def test_requested_ai_provider_credentials_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    payload = {
+        "OPENAI_API_KEY": PROVIDER_FIXTURES["openai_key"],
+        "GEMINI_API_KEY": PROVIDER_FIXTURES["gemini_api_key"],
+        "ANTHROPIC_API_KEY": PROVIDER_FIXTURES["anthropic_api_key"],
+        "DEEPSEEK_API_KEY": PROVIDER_FIXTURES["deepseek_api_key"],
+        "MINIMAX_API_KEY": PROVIDER_FIXTURES["minimax_api_key"],
+        "FIREWORKS_API_KEY": PROVIDER_FIXTURES["fireworks_api_key"],
+        "XAI_API_KEY": PROVIDER_FIXTURES["xai_api_key"],
+        "ZAI_API_KEY": "zai-provider-token-without-stable-prefix",
+        "CODEX_API_KEY": "codex-provider-token-without-stable-prefix",
+        "CODEX_ACCESS_TOKEN": "codex-access-token-without-stable-prefix",
+    }
+
+    result = redactor.redact_payload(payload)
+
+    for value in payload.values():
+        assert value not in result.value.values()
+    assert set(result.value.values()) == {"[REDACTED_SECRET]"}
+    assert result.stats.rule_hits["sensitive_field"] == len(payload)
+
+
+def test_cloudflare_headers_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    cloudflare_key = EXPANDED_PROVIDER_FIXTURES["cloudflare_api_key"]
+    text = "\n".join(
+        [
+            f"X-Auth-Key: {cloudflare_key}",
+            f"CF-Access-Token: {cloudflare_key}",
+            f"CLOUDFLARE_API_TOKEN={cloudflare_key}",
+        ]
+    )
+
+    result = redactor.redact_text(text)
+
+    assert cloudflare_key not in result.value
+    assert result.value.count("[REDACTED_SECRET]") == 3
+
+
+def test_signed_url_query_parameters_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    aws_signature = "a" * 64
+    google_signature = "b" * 64
+    azure_signature = "c" * 64
+    text = "\n".join(
+        [
+            "https://bucket.s3.amazonaws.com/object"
+            "?X-Amz-" + "Credential=AKIAEXAMPLE%2F20260619%2Fus-east-1%2Fs3%2Faws4_request"
+            "&X-Amz-" + f"Signature={aws_signature}",
+            "https://storage.googleapis.com/bucket/object"
+            "?Google" + "AccessId=service@example.iam.gserviceaccount.com"
+            "&X-Goog-" + f"Signature={google_signature}",
+            "https://acct.blob.core.windows.net/container/blob?sv=2025-11-05&"
+            "si" + f"g={azure_signature}",
+        ]
+    )
+
+    result = redactor.redact_text(text)
+
+    assert aws_signature not in result.value
+    assert google_signature not in result.value
+    assert azure_signature not in result.value
+    assert "X-Amz-Signature=[REDACTED_SECRET]" in result.value
+    assert "X-Goog-Signature=[REDACTED_SECRET]" in result.value
+    assert "sig=[REDACTED_SECRET]" in result.value
+
+
+def test_pgp_and_encrypted_private_keys_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    encrypted_key = (
+        "-----BEGIN " + "ENCRYPTED PRIVATE KEY-----\n"
+        "FixtureToken000000000000000000000\n"
+        "-----END " + "ENCRYPTED PRIVATE KEY-----"
+    )
+    pgp_key = (
+        "-----BEGIN " + "PGP PRIVATE KEY BLOCK-----\n"
+        "FixtureToken000000000000000000000\n"
+        "-----END " + "PGP PRIVATE KEY BLOCK-----"
+    )
+
+    result = redactor.redact_text(f"{encrypted_key}\n{pgp_key}")
+
+    assert encrypted_key not in result.value
+    assert pgp_key not in result.value
+    assert result.value.count("[REDACTED_SECRET]") == 2
+
+
 def test_prefixed_labeled_unknown_secret_is_redacted() -> None:
     redactor = SecretRedactor(RedactionConfig(engine="basic"))
     unknown_token = "opaque-provider-token-without-known-prefix"

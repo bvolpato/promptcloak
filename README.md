@@ -512,12 +512,16 @@ Tests cover fake tokens shaped like:
 - Gemini API keys
 - Anthropic API keys
 - OpenRouter keys
+- Z.AI, MiniMax, DeepSeek, Codex/OpenAI, xAI/Grok, and Fireworks keys when labeled or prefix-shaped
 - GitLab, Slack, Stripe, AWS, Google API keys
 - 1Password, Databricks, DigitalOcean, Hugging Face, Linear, npm, PyPI, SendGrid, Telegram, Twilio, Vault, Shopify, Sentry
+- Cloudflare API keys/tokens in assignment form or `X-Auth-Key` / `CF-Access-Token` headers
+- AWS, Google Cloud Storage, and Azure signed URL signatures and credential parameters
 - JWTs
-- PEM private keys
+- PEM, encrypted PEM, and PGP private keys
 - Authorization-style headers and URL credentials in request bodies
 - `password=...`, `token=...`, `api_key=...`
+- JSON object fields named like `api_key`, `token`, `secret`, `password`, `authorization`, `credentials`, `signed_url`, or `sas_token`
 - User exact-tail and regex rules
 
 Every scan is local. PromptCloak never calls an LLM to detect secrets. Entropy-only

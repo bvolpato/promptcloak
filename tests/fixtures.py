@@ -17,6 +17,10 @@ PROVIDER_FIXTURES = {
     "gemini_api_key": fake_secret("AI" + "zaSy"),
     "anthropic_api_key": fake_secret("sk-" + "ant-api03-"),
     "openrouter_key": fake_secret("sk-" + "or-v1-"),
+    "deepseek_api_key": fake_secret("sk-" + "deepseek-"),
+    "minimax_api_key": fake_secret("sk-" + "cp-"),
+    "fireworks_api_key": fake_secret("fw" + "_"),
+    "xai_api_key": fake_secret("xai" + "-"),
     "gitlab_token": fake_secret("glpat-"),
     "slack_token": fake_secret("xox" + "b-"),
     "stripe_key": fake_secret("sk" + "_test_"),
@@ -41,6 +45,7 @@ EXPANDED_PROVIDER_FIXTURES = {
     "vault_token": "hvs" + "." + ("a" * 90),
     "shopify_token": "sh" + "pat_" + ("a" * 32),
     "sentry_token": "sn" + "tryu_" + ("a" * 40),
+    "cloudflare_api_key": fake_secret("cloudflare-"),
 }
 
 OPENAI_FAKE = fake_secret("sk-")

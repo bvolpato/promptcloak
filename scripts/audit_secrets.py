@@ -42,7 +42,10 @@ SKIP_SUFFIXES = {
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b")),
     ("openrouter_key", re.compile(r"\bsk-or-v1-[A-Za-z0-9_-]{20,}\b")),
+    ("minimax_key", re.compile(r"\bsk-cp-[A-Za-z0-9_-]{20,}\b")),
     ("generic_sk_key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
+    ("fireworks_key", re.compile(r"\bfw_[A-Za-z0-9_-]{20,}\b")),
+    ("xai_key", re.compile(r"\bxai-[A-Za-z0-9_-]{20,}\b")),
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{30,}\b")),
     ("github_fine_grained_pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{30,}\b")),
     ("atlassian_api_token", re.compile(r"\bATATT3xFfGF0[A-Za-z0-9_-]{20,}\b")),
@@ -55,8 +58,23 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "private_key",
         re.compile(
-            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]+?-----END "
-            r"(?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
+            r"[\s\S]+?-----END (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
+        ),
+    ),
+    (
+        "pgp_private_key",
+        re.compile(
+            r"-----BEGIN PGP " r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
+            r"PRIVATE KEY BLOCK-----"
+        ),
+    ),
+    (
+        "signed_url_query_param",
+        re.compile(
+            r"(?i)([?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|"
+            r"x-goog-signature|x-goog-credential|googleaccessid|signature|sig)=)"
+            r"([^&#\s]+)"
         ),
     ),
 ]

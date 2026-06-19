@@ -19,6 +19,7 @@ Scope: local proxy, redaction engine, library helpers, config loading, emergency
 - Response scanning redacts JSON responses with case-insensitive content types.
 - Target URL userinfo is rejected.
 - Emergency tracing masks redaction rule headers and keeps redacted body clean.
+- Provider fixtures cover Cloudflare, signed URLs, encrypted PEM/PGP keys, and newer AI providers including Z.AI, MiniMax, DeepSeek, Codex/OpenAI, xAI/Grok, and Fireworks.
 
 ## Fixture Hygiene
 
