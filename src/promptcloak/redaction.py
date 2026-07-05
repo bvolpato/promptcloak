@@ -53,7 +53,9 @@ BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("sendgrid_token", re.compile(r"\bSG\.[A-Za-z0-9_.=-]{66}\b")),
     (
         "slack_webhook",
-        re.compile(r"\bhttps?://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9+/]{43,80}\b"),
+        re.compile(
+            r"\bhttps?://hooks\.slack\.com/(?:services|workflows|triggers)/[A-Za-z0-9+/]{43,80}\b"
+        ),
     ),
     ("telegram_bot_token", re.compile(r"\b[0-9]{5,16}:A[A-Za-z0-9_-]{34}\b")),
     ("twilio_api_key", re.compile(r"\bSK[0-9a-fA-F]{32}\b")),
@@ -70,7 +72,8 @@ BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "pgp_private_key",
         re.compile(
-            r"-----BEGIN PGP " r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
+            r"-----BEGIN PGP "
+            r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
             r"PRIVATE KEY BLOCK-----"
         ),
     ),

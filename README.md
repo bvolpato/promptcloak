@@ -45,8 +45,8 @@ Coverage is deterministic: `bc-detect-secrets` plus PromptCloak provider rules a
 ```bash
 brew tap bvolpato/tap
 brew install promptcloak
-promptcloak init
-export OPENROUTER_API_KEY="<upstream-provider-key>"
+promptcloak init --target-base-url https://api.openai.com/v1
+export OPENAI_API_KEY="<upstream-provider-key>"
 promptcloak serve
 ```
 
@@ -108,13 +108,13 @@ PromptCloak audit logs include counts and rule names, never secret values.
 brew tap bvolpato/tap
 brew install promptcloak
 promptcloak version
-promptcloak init --target-base-url https://openrouter.ai/api/v1
+promptcloak init --target-base-url https://api.openai.com/v1
 ```
 
 Foreground mode keeps the upstream key in your shell:
 
 ```bash
-export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+export OPENAI_API_KEY="<openai-upstream-key>"
 promptcloak serve
 ```
 
@@ -214,7 +214,7 @@ messages = [{"role": "user", "content": "GEMINI_API_KEY=<api-key-like-value>"}]
 
 response = completion(
     **redact_params(
-        model="openrouter/openai/gpt-5.5",
+        model="openai/gpt-5.5",
         messages=messages,
     )
 )
@@ -305,7 +305,7 @@ payload = {
 }
 
 response = httpx.post(
-    "https://openrouter.ai/api/v1/chat/completions",
+    "https://api.openai.com/v1/chat/completions",
     headers={"Authorization": "Bearer <provider-api-key>"},
     json=redact_payload(payload),
 )
@@ -314,8 +314,8 @@ response = httpx.post(
 ## Run
 
 ```bash
-uv run promptcloak init --target-base-url https://openrouter.ai/api/v1
-export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+uv run promptcloak init --target-base-url https://api.openai.com/v1
+export OPENAI_API_KEY="<openai-upstream-key>"
 uv run promptcloak serve
 ```
 
@@ -328,8 +328,8 @@ server:
   api_key: null
 
 target:
-  default_base_url: https://openrouter.ai/api/v1
-  api_key: ${OPENROUTER_API_KEY}
+  default_base_url: https://api.openai.com/v1
+  api_key: ${OPENAI_API_KEY}
   api_key_header: authorization
   forward_client_authorization: false
   timeout_seconds: 180
@@ -381,11 +381,64 @@ Set `X-Target-API-Key-Header: x-api-key` for Anthropic-style upstream authentica
 
 Use `target.allowed_base_urls` for strict allowlists.
 
+## Provider targets
+
+PromptCloak forwards routes without reshaping provider payloads. Pick a default target
+in config, or pass the target per request.
+
+| Target | Base URL | Auth header | Notes |
+| --- | --- | --- | --- |
+| OpenAI | `https://api.openai.com/v1` | `authorization` | Native Chat Completions, Responses API, models, tools, streaming. |
+| OpenRouter | `https://openrouter.ai/api/v1` | `authorization` | OpenAI-compatible gateway. Use provider-prefixed model names. |
+| Anthropic / Claude-compatible | `https://api.anthropic.com` | `x-api-key` | Forward `/v1/messages`; PromptCloak does not translate OpenAI JSON into Anthropic JSON. |
+| Local Ollama or vLLM | `http://127.0.0.1:11434/v1` or another local `/v1` endpoint | provider-specific | Set `block_private_targets: false` only for local-only configs. |
+
+OpenAI default:
+
+```bash
+export OPENAI_API_KEY="<openai-upstream-key>"
+promptcloak init --target-base-url https://api.openai.com/v1
+promptcloak serve
+```
+
+OpenRouter per request:
+
+```bash
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "X-Target-Base-URL: https://openrouter.ai/api/v1" \
+  -H "X-Target-API-Key: $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-oss-120b","messages":[{"role":"user","content":"scan this <api-key-like-value>"}]}'
+```
+
+Anthropic-compatible target:
+
+```bash
+curl http://127.0.0.1:8000/v1/messages \
+  -H "X-Target-Base-URL: https://api.anthropic.com" \
+  -H "X-Target-API-Key: $ANTHROPIC_API_KEY" \
+  -H "X-Target-API-Key-Header: x-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-opus-4-8","max_tokens":256,"messages":[{"role":"user","content":"scan this <api-key-like-value>"}]}'
+```
+
+Local OpenAI-compatible target:
+
+```yaml
+target:
+  default_base_url: http://127.0.0.1:11434/v1
+  api_key: null
+  allowed_base_urls:
+    - http://127.0.0.1:11434/v1
+  block_private_targets: false
+```
+
 ## Codex
 
 Codex speaks OpenAI Responses. Some gateways expose Chat Completions only. PromptCloak can bridge Codex `/v1/responses` traffic to upstream `/v1/chat/completions` with `compat.responses_to_chat: true`.
 
-For OpenRouter through PromptCloak, put `env_key = "OPENROUTER_API_KEY"` in the Codex provider. Codex attaches the key to localhost requests, and PromptCloak forwards that Authorization header to the allowed OpenRouter upstream.
+OpenRouter is one Codex-friendly target because PromptCloak can bridge Codex Responses traffic to Chat Completions. For OpenRouter through PromptCloak, put `env_key = "OPENROUTER_API_KEY"` in the Codex provider. Codex attaches the key to localhost requests, and PromptCloak forwards that Authorization header to the allowed OpenRouter upstream.
 
 PromptCloak config:
 
@@ -469,8 +522,8 @@ OpenCode supports custom OpenAI-compatible providers through `@ai-sdk/openai-com
 Option A: set upstream provider on PromptCloak:
 
 ```bash
-export PROMPTCLOAK_TARGET_BASE_URL="https://openrouter.ai/api/v1"
-export PROMPTCLOAK_TARGET_API_KEY="<openrouter-upstream-key>"
+export PROMPTCLOAK_TARGET_BASE_URL="https://api.openai.com/v1"
+export PROMPTCLOAK_TARGET_API_KEY="<openai-upstream-key>"
 promptcloak serve
 ```
 
@@ -488,18 +541,18 @@ Option B: set upstream provider per request from OpenCode headers:
       "options": {
         "baseURL": "http://127.0.0.1:8000/v1",
         "headers": {
-          "X-Target-Base-URL": "https://openrouter.ai/api/v1",
-          "X-Target-API-Key": "{env:OPENROUTER_API_KEY}"
+          "X-Target-Base-URL": "https://api.openai.com/v1",
+          "X-Target-API-Key": "{env:OPENAI_API_KEY}"
         }
       },
       "models": {
-        "openai/gpt-5.5": {
+        "gpt-5.5": {
           "name": "GPT-5.5 via PromptCloak"
         }
       }
     }
   },
-  "model": "promptcloak/openai/gpt-5.5"
+  "model": "promptcloak/gpt-5.5"
 }
 ```
 
@@ -578,12 +631,12 @@ export PROMPTCLOAK_CONFIG_KEY="base64-url-safe-32-byte-key"
 Published image:
 
 ```bash
-export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+export OPENAI_API_KEY="<openai-upstream-key>"
 
 docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
+  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
+  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
   ghcr.io/bvolpato/promptcloak:0.1.5
 
 curl -fsS http://127.0.0.1:8000/healthz
@@ -596,8 +649,8 @@ Local build:
 docker build -t promptcloak:local .
 docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
+  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
+  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
   promptcloak:local
 
 curl -fsS http://127.0.0.1:8000/healthz
@@ -607,7 +660,7 @@ docker stop promptcloak
 Compose:
 
 ```bash
-export OPENROUTER_API_KEY="<openrouter-upstream-key>"
+export OPENAI_API_KEY="<openai-upstream-key>"
 docker compose up --build
 ```
 
@@ -617,7 +670,8 @@ Local chart:
 
 ```bash
 helm install promptcloak ./charts/promptcloak \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+  --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
 kubectl port-forward svc/promptcloak 8000:8000
@@ -639,7 +693,8 @@ helm install promptcloak ./charts/promptcloak \
   --set image.repository=promptcloak \
   --set image.tag=local \
   --set image.pullPolicy=Never \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+  --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 ```
 
 Release asset:
@@ -647,7 +702,8 @@ Release asset:
 ```bash
 helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5.tgz
 helm install promptcloak ./promptcloak-0.1.5.tgz \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+  --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 ```
 
 ## Security model

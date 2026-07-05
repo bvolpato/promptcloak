@@ -65,7 +65,8 @@ PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "pgp_private_key",
         re.compile(
-            r"-----BEGIN PGP " r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
+            r"-----BEGIN PGP "
+            r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
             r"PRIVATE KEY BLOCK-----"
         ),
     ),

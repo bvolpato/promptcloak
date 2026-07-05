@@ -155,13 +155,9 @@ class _ChatStreamState:
         return events
 
 
-async def _chat_sse_event_to_responses(
-    raw: str, state: _ChatStreamState
-) -> AsyncIterator[bytes]:
+async def _chat_sse_event_to_responses(raw: str, state: _ChatStreamState) -> AsyncIterator[bytes]:
     data = "\n".join(
-        line.removeprefix("data:").lstrip()
-        for line in raw.splitlines()
-        if line.startswith("data:")
+        line.removeprefix("data:").lstrip() for line in raw.splitlines() if line.startswith("data:")
     )
     if not data:
         return

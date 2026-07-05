@@ -12,7 +12,7 @@ service:
 env:
   PROMPTCLOAK_HOST: 0.0.0.0
   PROMPTCLOAK_PORT: "8000"
-  PROMPTCLOAK_TARGET_DEFAULT_BASE_URL: https://openrouter.ai/api/v1
+  PROMPTCLOAK_TARGET_DEFAULT_BASE_URL: https://api.openai.com/v1
 
 secretEnv: {}
 

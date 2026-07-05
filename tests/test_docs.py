@@ -27,3 +27,10 @@ def test_docs_do_not_claim_pypi_install() -> None:
 
     assert "uv add promptcloak" not in readme
     assert "uv add promptcloak" not in site
+
+
+def test_site_uses_local_syntax_highlighting() -> None:
+    site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+
+    assert '<script src="./highlight.js" defer></script>' in site
+    assert (ROOT / "site" / "highlight.js").is_file()

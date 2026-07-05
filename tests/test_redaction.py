@@ -34,9 +34,7 @@ def test_provider_api_keys_are_redacted() -> None:
 
 def test_expanded_provider_tokens_are_redacted() -> None:
     redactor = SecretRedactor(RedactionConfig(engine="basic"))
-    text = "\n".join(
-        f"{name}={value}" for name, value in EXPANDED_PROVIDER_FIXTURES.items()
-    )
+    text = "\n".join(f"{name}={value}" for name, value in EXPANDED_PROVIDER_FIXTURES.items())
 
     result = redactor.redact_text(text)
 

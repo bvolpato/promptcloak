@@ -9,9 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_openrouter_promptcloak_example_is_valid() -> None:
-    data = yaml.safe_load(
-        (ROOT / "examples" / "promptcloak-openrouter.config.yaml").read_text()
-    )
+    data = yaml.safe_load((ROOT / "examples" / "promptcloak-openrouter.config.yaml").read_text())
     settings = Settings.model_validate(data)
 
     assert settings.target.default_base_url == "https://openrouter.ai/api/v1"

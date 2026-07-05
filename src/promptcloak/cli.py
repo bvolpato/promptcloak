@@ -73,11 +73,11 @@ def init(
     target_base_url: Annotated[
         str,
         typer.Option(help="Default upstream base URL."),
-    ] = "https://openrouter.ai/api/v1",
+    ] = "https://api.openai.com/v1",
     target_api_key_env: Annotated[
         str,
         typer.Option(help="Environment variable holding upstream API key."),
-    ] = "OPENROUTER_API_KEY",
+    ] = "OPENAI_API_KEY",
     force: Annotated[bool, typer.Option(help="Overwrite existing config.")] = False,
 ) -> None:
     if config.exists() and not force:

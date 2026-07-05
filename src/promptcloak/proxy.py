@@ -132,9 +132,9 @@ async def forward_request(request: Request, path: str) -> Response:
         target_path = "/v1/chat/completions"
         target_url = _target_url(request, target_path, settings)
         _validate_target(target_url, settings)
-        content = json.dumps(
-            responses_to_chat_payload(json_payload), separators=(",", ":")
-        ).encode("utf-8")
+        content = json.dumps(responses_to_chat_payload(json_payload), separators=(",", ":")).encode(
+            "utf-8"
+        )
 
     _debug_request(request, path, target_url, body, content, stats, settings)
 
