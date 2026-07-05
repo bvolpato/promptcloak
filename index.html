@@ -18,6 +18,7 @@
     <meta name="twitter:image" content="https://bvolpato.github.io/promptcloak/hero.png" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
+    <script src="./highlight.js" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -109,8 +110,8 @@
         </div>
         <pre><code>brew tap bvolpato/tap
 brew install promptcloak
-promptcloak init
-export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+promptcloak init --target-base-url https://api.openai.com/v1
+export OPENAI_API_KEY="&lt;openai-upstream-key&gt;"
 promptcloak serve</code></pre>
         <pre><code>FAKE_KEY="AI""zaSyFixtureToken000000000000000000000"
 curl -fsS http://127.0.0.1:8000/v1/chat/completions \
@@ -133,8 +134,8 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
         <div class="code-grid">
           <pre><code>brew tap bvolpato/tap
 brew install promptcloak
-promptcloak init
-export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+promptcloak init --target-base-url https://api.openai.com/v1
+export OPENAI_API_KEY="&lt;openai-upstream-key&gt;"
 promptcloak serve</code></pre>
           <pre><code>curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
@@ -150,28 +151,50 @@ safe = redact_messages([
       <section id="proxy" class="section">
         <div class="section-copy">
           <p class="eyebrow">Proxy mode</p>
-          <h2>Forward without reshaping requests.</h2>
+          <h2>Use any target that speaks the route.</h2>
           <p>
             PromptCloak redacts JSON and text bodies, forwards the original route, and
-            leaves provider-specific fields intact.
+            leaves provider-specific fields intact. Set one default target, or send
+            per-request target headers.
           </p>
         </div>
         <div class="agent-grid">
           <article>
-            <h3>Dynamic upstreams</h3>
+            <h3>OpenAI default</h3>
             <pre><code>curl http://127.0.0.1:8000/v1/responses \
   -H "X-Target-Base-URL: https://api.openai.com/v1" \
   -H "X-Target-API-Key: $OPENAI_API_KEY"</code></pre>
           </article>
           <article>
-            <h3>Default config</h3>
+            <h3>Config default</h3>
             <pre><code>target:
-  default_base_url: https://openrouter.ai/api/v1
-  api_key: ${OPENROUTER_API_KEY}
+  default_base_url: https://api.openai.com/v1
+  api_key: ${OPENAI_API_KEY}
   api_key_header: authorization
 redaction:
   engine: detect-secrets
   redact_mode: full</code></pre>
+          </article>
+          <article>
+            <h3>OpenRouter request</h3>
+            <pre><code>curl http://127.0.0.1:8000/v1/chat/completions \
+  -H "X-Target-Base-URL: https://openrouter.ai/api/v1" \
+  -H "X-Target-API-Key: $OPENROUTER_API_KEY"</code></pre>
+          </article>
+          <article>
+            <h3>Anthropic-compatible</h3>
+            <pre><code>curl http://127.0.0.1:8000/v1/messages \
+  -H "X-Target-Base-URL: https://api.anthropic.com" \
+  -H "X-Target-API-Key: $ANTHROPIC_API_KEY" \
+  -H "X-Target-API-Key-Header: x-api-key"</code></pre>
+          </article>
+          <article>
+            <h3>Local Ollama/vLLM</h3>
+            <pre><code>target:
+  default_base_url: http://127.0.0.1:11434/v1
+  allowed_base_urls:
+    - http://127.0.0.1:11434/v1
+  block_private_targets: false</code></pre>
           </article>
           <article>
             <h3>Routes</h3>
@@ -213,7 +236,7 @@ from promptcloak import redact_params
 messages = [{"role": "user", "content": "API_KEY=&lt;secret&gt;"}]
 
 completion(**redact_params(
-  model="openrouter/openai/gpt-5.5",
+  model="openai/gpt-5.5",
   messages=messages,
 ))</code></pre>
           </article>
@@ -296,8 +319,8 @@ stream_max_retries = 0
       "options": {
         "baseURL": "http://127.0.0.1:8000/v1",
         "headers": {
-          "X-Target-Base-URL": "https://openrouter.ai/api/v1",
-          "X-Target-API-Key": "{env:OPENROUTER_API_KEY}"
+          "X-Target-Base-URL": "https://api.openai.com/v1",
+          "X-Target-API-Key": "{env:OPENAI_API_KEY}"
         }
       }
     }
@@ -364,8 +387,8 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
             <h3>Docker</h3>
             <pre><code>docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://openrouter.ai/api/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY" \
+  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
+  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
   ghcr.io/bvolpato/promptcloak:0.1.5
 
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>
@@ -374,7 +397,8 @@ curl -fsS http://127.0.0.1:8000/healthz</code></pre>
             <h3>Helm</h3>
             <pre><code>helm install promptcloak \
   https://github.com/bvolpato/promptcloak/releases/download/v0.1.5/promptcloak-0.1.5.tgz \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENROUTER_API_KEY"
+  --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
+  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
 kubectl port-forward svc/promptcloak 8000:8000

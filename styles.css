@@ -263,6 +263,34 @@ pre code {
   min-width: max-content;
 }
 
+.tok-comment {
+  color: #7d8a86;
+}
+
+.tok-string {
+  color: #9ee6c7;
+}
+
+.tok-key,
+.tok-section {
+  color: #7ab7ff;
+}
+
+.tok-keyword,
+.tok-call {
+  color: #bca7ff;
+}
+
+.tok-variable,
+.tok-flag {
+  color: #f2c56b;
+}
+
+.tok-number,
+.tok-literal {
+  color: #f17878;
+}
+
 .strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
