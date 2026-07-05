@@ -1,8 +1,14 @@
 # PromptCloak
 
+[![CI](https://github.com/bvolpato/promptcloak/actions/workflows/ci.yml/badge.svg)](https://github.com/bvolpato/promptcloak/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/bvolpato/promptcloak)](https://github.com/bvolpato/promptcloak/releases)
+[![License: MIT](https://img.shields.io/github/license/bvolpato/promptcloak)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab)](pyproject.toml)
+[![Docker](https://img.shields.io/badge/GHCR-promptcloak-54d6a0)](https://github.com/bvolpato/promptcloak/pkgs/container/promptcloak)
+
 **Run LLM requests through a local secret scrubber before they leave your machine.**
 
-PromptCloak is an OpenAI-compatible proxy and Python library for removing secrets from prompts. It scans request values locally, replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches, then forwards or returns cleaned payloads.
+PromptCloak is for developers using coding agents, SDKs, and OpenAI-compatible backends that should never receive local credentials embedded in prompts. It runs on your machine, scans request bodies before forwarding, and replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches.
 
 No telemetry. No phone-home. No full-secret storage required.
 
@@ -10,6 +16,29 @@ No telemetry. No phone-home. No full-secret storage required.
 
 Website: `https://bvolpato.github.io/promptcloak/`
 Repository: `https://github.com/bvolpato/promptcloak`
+
+## What you get
+
+| Need | Use |
+| --- | --- |
+| Protect coding agents and IDEs | Run `promptcloak serve` and point OpenAI-compatible clients at `http://127.0.0.1:8000/v1`. |
+| Protect SDK calls in your app | Import `redact_messages`, `redact_params`, or `redact_payload`. |
+| Route to different providers | Use config defaults or `X-Target-Base-URL` per request. |
+| Prove redaction works | Send fixture tokens to an echo target instead of asking a model to repeat secrets. |
+
+## What gets redacted
+
+Default rules cover provider keys, personal access tokens, passwords, JWTs, signed URLs, URL credentials, PEM/PGP private keys, and common secret fields such as `api_key`, `token`, `authorization`, `password`, `signed_url`, and `credentials`.
+
+Coverage is deterministic: `bc-detect-secrets` plus PromptCloak provider rules and your exact-tail or regex rules. Entropy-only matching is disabled so redaction stays predictable.
+
+## Security boundary
+
+- Request bodies are scanned before they leave your machine.
+- Audit logs store counts and rule names, never secret values.
+- Upstream auth headers still have to reach the provider when used for authentication.
+- Unknown private token formats need a custom exact-tail or regex rule.
+- `--debug-requests` can print raw local request bodies; use it only with fixture data.
 
 ## 60-second demo
 

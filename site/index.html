@@ -6,12 +6,12 @@
     <title>PromptCloak</title>
     <meta
       name="description"
-      content="Local OpenAI-compatible proxy and Python library for redacting secrets before prompts leave your machine."
+      content="Open-source local proxy and Python library for redacting secrets before LLM requests leave your machine."
     />
     <meta property="og:title" content="PromptCloak" />
     <meta
       property="og:description"
-      content="Redact keys, tokens, private keys, signed URLs, and custom rules before LLM requests leave your machine."
+      content="Redact keys, tokens, private keys, signed URLs, and custom rules before requests reach LLM providers."
     />
     <meta property="og:image" content="https://bvolpato.github.io/promptcloak/hero.png" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -30,6 +30,7 @@
         <a href="#proxy">Proxy</a>
         <a href="#library">Library</a>
         <a href="#agents">Agents</a>
+        <a href="#limits">Limits</a>
         <a href="#security">Security</a>
         <a href="https://github.com/bvolpato/promptcloak">GitHub</a>
       </nav>
@@ -41,18 +42,19 @@
           <p class="eyebrow">Local secret redaction</p>
           <h1>PromptCloak</h1>
           <p class="lede">
-            Run a small proxy or Python filter before your LLM backend. PromptCloak
-            removes keys, tokens, passwords, private keys, and signed URLs from request
-            bodies before they leave your machine.
+            Open-source proxy and Python filter for developers who use coding agents,
+            SDKs, and OpenAI-compatible backends but do not want local credentials
+            embedded in prompts.
           </p>
           <div class="actions">
             <a class="button primary" href="#install">Start</a>
-            <a class="button secondary" href="#library">Library</a>
+            <a class="button secondary" href="#smoke">Verify</a>
             <a class="button secondary" href="https://github.com/bvolpato/promptcloak">GitHub</a>
           </div>
           <div class="hero-facts" aria-label="Project guarantees">
             <span>Local only</span>
             <span>No telemetry</span>
+            <span>MIT licensed</span>
             <span>Proxy or library</span>
           </div>
         </div>
@@ -61,7 +63,7 @@
       <section class="strip" aria-label="Core guarantees">
         <div>
           <strong>Secrets stay local</strong>
-          <span>Request bodies are cleaned before forwarding.</span>
+          <span>Request bodies are cleaned before providers see them.</span>
         </div>
         <div>
           <strong>Library mode</strong>
@@ -73,10 +75,33 @@
         </div>
       </section>
 
+      <section class="proof" aria-label="Open source project facts">
+        <div>
+          <span>Project</span>
+          <strong>Open source, MIT</strong>
+          <p>Source, releases, Docker image, Helm chart, and Homebrew formula are public.</p>
+        </div>
+        <div>
+          <span>Detection</span>
+          <strong>Deterministic local rules</strong>
+          <p>Provider patterns, detect-secrets, and custom exact-tail or regex rules.</p>
+        </div>
+        <div>
+          <span>Security posture</span>
+          <strong>No phone-home</strong>
+          <p>Audit logs record redaction counts and rule names, not secret values.</p>
+        </div>
+        <div>
+          <span>Protocol surface</span>
+          <strong>OpenAI-compatible</strong>
+          <p>Chat Completions, Responses API, legacy completions, models, and pass-through routes.</p>
+        </div>
+      </section>
+
       <section class="quickstart" aria-label="Quick redaction demo">
         <div>
           <p class="eyebrow">Verify</p>
-          <h2>See what upstream receives.</h2>
+          <h2>Verify with an echo target.</h2>
           <p>
             Start locally, point your client at <code>127.0.0.1:8000</code>, and use an
             echo target for redaction checks. Model replies are not reliable evidence.
@@ -127,8 +152,8 @@ safe = redact_messages([
           <p class="eyebrow">Proxy mode</p>
           <h2>Forward without reshaping requests.</h2>
           <p>
-            PromptCloak redacts JSON and text bodies, then forwards the original route
-            and provider-specific fields.
+            PromptCloak redacts JSON and text bodies, forwards the original route, and
+            leaves provider-specific fields intact.
           </p>
         </div>
         <div class="agent-grid">
@@ -308,6 +333,23 @@ curl -fsS http://127.0.0.1:8000/v1/chat/completions \
         </div>
       </section>
 
+      <section id="limits" class="section limits">
+        <div class="section-copy">
+          <p class="eyebrow">Limits</p>
+          <h2>Know the boundary.</h2>
+          <p>
+            PromptCloak protects request bodies before forwarding. Some credential
+            flows are outside that boundary.
+          </p>
+        </div>
+        <ul>
+          <li>Provider auth headers still need to reach the provider when used for authentication.</li>
+          <li>Unknown private token formats need a custom exact-tail or regex rule.</li>
+          <li>Streaming response redaction is intentionally not attempted.</li>
+          <li><code>--debug-requests</code> can print raw local request bodies. Use fixture data only.</li>
+        </ul>
+      </section>
+
       <section id="deploy" class="section">
         <div class="section-copy">
           <p class="eyebrow">Deploy</p>
@@ -407,6 +449,7 @@ safe_payload = redact_payload(payload)</code></pre>
 
     <footer>
       <span>MIT licensed.</span>
+      <a href="https://github.com/bvolpato/promptcloak">GitHub</a>
       <span>No telemetry. No phone-home.</span>
     </footer>
   </body>

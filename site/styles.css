@@ -295,6 +295,48 @@ li {
   line-height: 1.65;
 }
 
+.proof {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--line);
+  background: #0f1512;
+}
+
+.proof div {
+  min-width: 0;
+  padding: 26px clamp(20px, 4vw, 42px);
+  border-right: 1px solid var(--line);
+}
+
+.proof div:last-child {
+  border-right: 0;
+}
+
+.proof span,
+.proof strong {
+  display: block;
+}
+
+.proof span {
+  margin-bottom: 8px;
+  color: var(--green);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.proof strong {
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+.proof p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .section {
   display: grid;
   grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1.25fr);
@@ -384,6 +426,10 @@ article pre {
     var(--panel-2);
 }
 
+.limits {
+  background: #0f1412;
+}
+
 .coverage {
   background: #101512;
 }
@@ -422,6 +468,11 @@ footer {
   color: var(--muted);
 }
 
+footer a {
+  color: var(--text);
+  font-weight: 700;
+}
+
 @media (max-width: 920px) {
   .site-header,
   footer {
@@ -432,6 +483,7 @@ footer {
   .hero,
   .section,
   .strip,
+  .proof,
   .quickstart,
   .agent-grid {
     grid-template-columns: 1fr;
@@ -454,6 +506,15 @@ footer {
   .strip div:last-child {
     border-bottom: 0;
   }
+
+  .proof div {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .proof div:last-child {
+    border-bottom: 0;
+  }
 }
 
 @media (max-width: 560px) {
@@ -474,7 +535,10 @@ footer {
   .hero {
     min-height: 68vh;
     padding-top: 72px;
-    background-position: 62% center;
+    background:
+      linear-gradient(90deg, rgba(8, 11, 10, 0.96), rgba(8, 11, 10, 0.78)),
+      url("./hero.png") 62% center / cover no-repeat,
+      var(--bg);
   }
 
   .hero-facts {
