@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import json
 from collections.abc import AsyncIterator
 from typing import Any
@@ -54,18 +55,48 @@ async def chat_stream_to_responses(chunks: AsyncIterator[bytes]) -> AsyncIterato
             "response": {"id": state.response_id, "status": "in_progress"},
         }
     )
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
     buffer = ""
+    event_lines: list[str] = []
     async for chunk in chunks:
-        buffer += chunk.decode("utf-8", errors="replace")
-        while "\n\n" in buffer:
-            raw, buffer = buffer.split("\n\n", 1)
-            async for event in _chat_sse_event_to_responses(raw, state):
+        buffer += decoder.decode(chunk)
+        while (line := _pop_sse_line(buffer)) is not None:
+            value, buffer = line
+            if value:
+                event_lines.append(value)
+                continue
+            async for event in _chat_sse_event_to_responses("\n".join(event_lines), state):
                 yield event
-    if buffer.strip():
-        async for event in _chat_sse_event_to_responses(buffer, state):
+            event_lines.clear()
+    buffer += decoder.decode(b"", final=True)
+    while (line := _pop_sse_line(buffer, final=True)) is not None:
+        value, buffer = line
+        if value:
+            event_lines.append(value)
+        elif event_lines:
+            async for event in _chat_sse_event_to_responses("\n".join(event_lines), state):
+                yield event
+            event_lines.clear()
+    if buffer:
+        event_lines.append(buffer)
+    if event_lines:
+        async for event in _chat_sse_event_to_responses("\n".join(event_lines), state):
             yield event
     for event in state.finish_events():
         yield event
+
+
+def _pop_sse_line(buffer: str, *, final: bool = False) -> tuple[str, str] | None:
+    for index, character in enumerate(buffer):
+        if character == "\n":
+            return buffer[:index], buffer[index + 1 :]
+        if character != "\r":
+            continue
+        if index + 1 == len(buffer) and not final:
+            return None
+        end = index + 2 if buffer[index + 1 : index + 2] == "\n" else index + 1
+        return buffer[:index], buffer[end:]
+    return None
 
 
 class _ChatStreamState:
