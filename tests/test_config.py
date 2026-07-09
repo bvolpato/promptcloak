@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from promptcloak.config import TargetConfig, load_settings
+from promptcloak.config import RuleConfig, TargetConfig, load_settings
 
 
 def test_server_api_key_env(monkeypatch, tmp_path) -> None:
@@ -38,3 +38,13 @@ def test_server_api_key_env(monkeypatch, tmp_path) -> None:
 def test_target_base_urls_reject_ambiguous_values(url: str) -> None:
     with pytest.raises(ValidationError):
         TargetConfig(default_base_url=url)
+
+
+def test_exact_rules_require_safe_tail_length() -> None:
+    with pytest.raises(ValidationError):
+        RuleConfig(type="exact", value="short")
+
+
+def test_rule_names_are_bounded_log_labels() -> None:
+    with pytest.raises(ValidationError):
+        RuleConfig(type="regex", value="fixture", name="not a safe label")

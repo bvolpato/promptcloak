@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -49,6 +50,22 @@ class RuleConfig(BaseModel):
     type: Literal["exact", "regex"]
     value: str
     name: str | None = None
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: str, info: Any) -> str:
+        if not value:
+            raise ValueError("redaction rule cannot be empty")
+        if info.data.get("type") == "exact" and len(value) < 8:
+            raise ValueError("exact redaction rules require at least 8 characters")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", value):
+            raise ValueError("redaction rule name must be 1-64 safe characters")
+        return value
 
 
 def _validated_base_url(value: str) -> str:

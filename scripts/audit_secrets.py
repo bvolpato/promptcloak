@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import os
 import re
+import runpy
 import subprocess
 from collections import defaultdict
 from collections.abc import Iterable
@@ -16,6 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+_PATTERN_MODULE = runpy.run_path(ROOT / "src" / "promptcloak" / "patterns.py")
+PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    (name, pattern)
+    for name, pattern in _PATTERN_MODULE["BUILTIN_PATTERNS"]
+    if name not in _PATTERN_MODULE["AUDIT_EXCLUDED_PATTERN_NAMES"]
+]
 SKIP_DIRS = {
     ".git",
     ".mypy_cache",
@@ -38,47 +45,6 @@ SKIP_SUFFIXES = {
     ".tgz",
     ".whl",
 }
-
-PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b")),
-    ("openrouter_key", re.compile(r"\bsk-or-v1-[A-Za-z0-9_-]{20,}\b")),
-    ("minimax_key", re.compile(r"\bsk-cp-[A-Za-z0-9_-]{20,}\b")),
-    ("generic_sk_key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b")),
-    ("fireworks_key", re.compile(r"\bfw_[A-Za-z0-9_-]{20,}\b")),
-    ("xai_key", re.compile(r"\bxai-[A-Za-z0-9_-]{20,}\b")),
-    ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{30,}\b")),
-    ("github_fine_grained_pat", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{30,}\b")),
-    ("atlassian_api_token", re.compile(r"\bATATT3xFfGF0[A-Za-z0-9_-]{20,}\b")),
-    ("gemini_api_key", re.compile(r"\bAIza[0-9A-Za-z_-]{35,}\b")),
-    ("gitlab_token", re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b")),
-    ("slack_token", re.compile(r"\bxox[abpors]-[A-Za-z0-9-]{20,}\b")),
-    ("stripe_key", re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{20,}\b")),
-    ("aws_access_key", re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b")),
-    ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
-    (
-        "private_key",
-        re.compile(
-            r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
-            r"[\s\S]+?-----END (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
-        ),
-    ),
-    (
-        "pgp_private_key",
-        re.compile(
-            r"-----BEGIN PGP "
-            r"PRIVATE KEY BLOCK-----[\s\S]+?-----END PGP "
-            r"PRIVATE KEY BLOCK-----"
-        ),
-    ),
-    (
-        "signed_url_query_param",
-        re.compile(
-            r"(?i)([?&](?:x-amz-signature|x-amz-credential|x-amz-security-token|"
-            r"x-goog-signature|x-goog-credential|googleaccessid|signature|sig)=)"
-            r"([^&#\s]+)"
-        ),
-    ),
-]
 
 
 @dataclass(frozen=True)

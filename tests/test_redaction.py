@@ -70,6 +70,22 @@ def test_requested_ai_provider_credentials_are_redacted() -> None:
     assert result.stats.rule_hits["sensitive_field"] == len(payload)
 
 
+def test_aws_camel_case_secret_fields_are_redacted() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    secret = "OpaqueFixtureToken0000000000000000000000"
+    payload = {
+        "secretKey": secret,
+        "secretAccessKey": secret,
+        "awsSecretAccessKey": secret,
+        "accountKey": secret,
+    }
+
+    result = redactor.redact_payload(payload)
+
+    assert set(result.value.values()) == {"[REDACTED_SECRET]"}
+    assert result.stats.rule_hits["sensitive_field"] == len(payload)
+
+
 def test_cloudflare_headers_are_redacted() -> None:
     redactor = SecretRedactor(RedactionConfig(engine="basic"))
     cloudflare_key = EXPANDED_PROVIDER_FIXTURES["cloudflare_api_key"]
