@@ -34,3 +34,11 @@ def test_site_uses_local_syntax_highlighting() -> None:
 
     assert '<script src="./highlight.js" defer></script>' in site
     assert (ROOT / "site" / "highlight.js").is_file()
+
+
+def test_site_dynamic_target_example_includes_allowlist() -> None:
+    site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    openrouter_example = site.split("<h3>OpenRouter request</h3>", 1)[1].split("</article>", 1)[0]
+
+    assert "allowed_base_urls" in openrouter_example
+    assert "https://openrouter.ai/api/v1" in openrouter_example

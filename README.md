@@ -419,6 +419,12 @@ promptcloak serve
 
 OpenRouter per request:
 
+```yaml
+target:
+  allowed_base_urls:
+    - https://openrouter.ai/api/v1
+```
+
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "X-Target-Base-URL: https://openrouter.ai/api/v1" \
