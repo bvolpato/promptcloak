@@ -1,6 +1,7 @@
 # PromptCloak
 
 [![CI](https://github.com/bvolpato/promptcloak/actions/workflows/ci.yml/badge.svg)](https://github.com/bvolpato/promptcloak/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/bvolpato/promptcloak/actions/workflows/codeql.yml/badge.svg)](https://github.com/bvolpato/promptcloak/actions/workflows/codeql.yml)
 [![Release](https://img.shields.io/github/v/release/bvolpato/promptcloak)](https://github.com/bvolpato/promptcloak/releases)
 [![License: MIT](https://img.shields.io/github/license/bvolpato/promptcloak)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab)](pyproject.toml)
@@ -769,4 +770,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SECURIT
 
 ## Distribution
 
-PromptCloak ships GitHub releases with source, wheel, Helm chart, Homebrew formula, and GHCR image artifacts.
+PromptCloak ships signed tags, checksums, build provenance, source, wheel, Helm chart,
+Homebrew formula, and GHCR images with SBOM attestations.

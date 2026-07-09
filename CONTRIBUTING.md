@@ -39,7 +39,8 @@ Before tagging, keep these versions identical:
 - `src/promptcloak/version.py`
 - `charts/promptcloak/Chart.yaml`
 
-The release workflow reruns checks, builds source/wheel artifacts, and uploads them to the GitHub release.
+The release workflow reruns checks, builds source/wheel/Helm artifacts, writes `SHA256SUMS`,
+attests build provenance, publishes an SBOM-backed container image, and uploads release assets.
 
 ## Secret Hygiene
 
