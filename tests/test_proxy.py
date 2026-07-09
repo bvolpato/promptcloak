@@ -98,6 +98,100 @@ async def test_per_request_redaction_rules() -> None:
 
 
 @pytest.mark.asyncio
+async def test_per_request_regex_rules_are_rejected_by_default() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Redact-Extra-Rules": '[{"type":"regex","value":"(a+)+$"}]'},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid X-Redact-Extra-Rules header"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_per_request_regex_rules_can_be_enabled_explicitly() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic", allow_extra_regex_rules=True),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Redact-Extra-Rules": '[{"type":"regex","value":"fixture-[0-9]+"}]'},
+            json={"input": "fixture-123456"},
+        )
+
+    assert response.status_code == 200
+    assert "fixture-123456" not in route.calls.last.request.content.decode()
+
+
+@pytest.mark.asyncio
+async def test_per_request_rule_count_is_limited() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(max_extra_rules=1),
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+    rules = [
+        {"type": "exact", "value": "abcd1234"},
+        {"type": "exact", "value": "efgh5678"},
+    ]
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Redact-Extra-Rules": json.dumps(rules)},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_request_body_size_is_limited_while_streaming() -> None:
+    settings = Settings(
+        server=ServerConfig(max_request_body_bytes=1024),
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async def body_chunks():
+        yield b"a" * 700
+        yield b"b" * 700
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Content-Type": "text/plain"},
+            content=body_chunks(),
+        )
+
+    assert response.status_code == 413
+    assert response.json()["detail"] == "request body too large"
+
+
+@pytest.mark.asyncio
 async def test_proxy_auth_rejects_wrong_key() -> None:
     app = create_app(Settings(server=ServerConfig(api_key="local-token")))
     transport = httpx.ASGITransport(app=app)

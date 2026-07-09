@@ -326,6 +326,7 @@ server:
   host: 127.0.0.1
   port: 8000
   api_key: null
+  max_request_body_bytes: 33554432
 
 target:
   default_base_url: https://api.openai.com/v1
@@ -342,6 +343,9 @@ redaction:
   redact_mode: full
   encrypted: false
   scan_responses: false
+  max_extra_rules: 20
+  max_extra_rule_chars: 1024
+  allow_extra_regex_rules: false
   rules:
     - type: exact
       value: abcd1234
@@ -384,6 +388,9 @@ Configured target keys are bound to `target.default_base_url`. A request that ch
 `X-Target-Authorization`.
 
 Use `target.allowed_base_urls` for strict allowlists.
+
+Per-request rules are exact matches by default. Regex rules remain available in trusted config.
+Set `redaction.allow_extra_regex_rules: true` only for authenticated clients you trust.
 
 ## Provider targets
 

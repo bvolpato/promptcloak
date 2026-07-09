@@ -21,6 +21,7 @@ class ServerConfig(BaseModel):
     api_key: str | None = None
     debug_requests: bool = False
     debug_max_body_chars: int = 20000
+    max_request_body_bytes: int = Field(default=32 * 1024 * 1024, ge=1024)
 
 
 class TargetConfig(BaseModel):
@@ -56,6 +57,10 @@ class RedactionConfig(BaseModel):
     encrypted: bool = False
     encrypted_rules: str | None = None
     scan_responses: bool = False
+    max_extra_rules: int = Field(default=20, ge=0, le=100)
+    max_extra_rule_chars: int = Field(default=1024, ge=8, le=8192)
+    max_extra_rules_header_bytes: int = Field(default=16384, ge=256, le=65536)
+    allow_extra_regex_rules: bool = False
 
 
 class AuditConfig(BaseModel):
@@ -91,6 +96,7 @@ def _env_overrides() -> dict[str, Any]:
         "PROMPTCLOAK_SERVER_API_KEY": ("server", "api_key"),
         "PROMPTCLOAK_DEBUG_REQUESTS": ("server", "debug_requests"),
         "PROMPTCLOAK_DEBUG_MAX_BODY_CHARS": ("server", "debug_max_body_chars"),
+        "PROMPTCLOAK_MAX_REQUEST_BODY_BYTES": ("server", "max_request_body_bytes"),
         "PROMPTCLOAK_TARGET_DEFAULT_BASE_URL": ("target", "default_base_url"),
         "PROMPTCLOAK_TARGET_BASE_URL": ("target", "default_base_url"),
         "PROMPTCLOAK_TARGET_API_KEY": ("target", "api_key"),
@@ -104,6 +110,13 @@ def _env_overrides() -> dict[str, Any]:
         "PROMPTCLOAK_REDACTION_ENGINE": ("redaction", "engine"),
         "PROMPTCLOAK_REDACTION_MODE": ("redaction", "redact_mode"),
         "PROMPTCLOAK_SCAN_RESPONSES": ("redaction", "scan_responses"),
+        "PROMPTCLOAK_MAX_EXTRA_RULES": ("redaction", "max_extra_rules"),
+        "PROMPTCLOAK_MAX_EXTRA_RULE_CHARS": ("redaction", "max_extra_rule_chars"),
+        "PROMPTCLOAK_MAX_EXTRA_RULES_HEADER_BYTES": (
+            "redaction",
+            "max_extra_rules_header_bytes",
+        ),
+        "PROMPTCLOAK_ALLOW_EXTRA_REGEX_RULES": ("redaction", "allow_extra_regex_rules"),
         "PROMPTCLOAK_RESPONSES_TO_CHAT": ("compat", "responses_to_chat"),
     }
     data: dict[str, Any] = {}
@@ -167,6 +180,7 @@ def config_template(target_base_url: str, target_api_key_env: str) -> str:
                 "api_key": None,
                 "debug_requests": False,
                 "debug_max_body_chars": 20000,
+                "max_request_body_bytes": 33554432,
             },
             "target": {
                 "default_base_url": target_base_url,
@@ -183,6 +197,10 @@ def config_template(target_base_url: str, target_api_key_env: str) -> str:
                 "redact_mode": "full",
                 "encrypted": False,
                 "scan_responses": False,
+                "max_extra_rules": 20,
+                "max_extra_rule_chars": 1024,
+                "max_extra_rules_header_bytes": 16384,
+                "allow_extra_regex_rules": False,
                 "rules": [
                     {
                         "type": "exact",

@@ -108,7 +108,7 @@ async def forward_request(request: Request, path: str) -> Response:
     target_url = _target_url(request, target_path, settings)
     _validate_target(target_url, settings)
 
-    body = await request.body()
+    body = await _read_request_body(request, settings.server.max_request_body_bytes)
     redactor = _redactor_for_request(request, settings)
     audit: AuditLogger = request.app.state.audit
     content = body
@@ -232,13 +232,45 @@ def _redactor_for_request(request: Request, settings: Settings) -> SecretRedacto
     raw_rules = request.headers.get("x-redact-extra-rules")
     if not raw_rules:
         return request.app.state.redactor
+    redaction = settings.redaction
+    if len(raw_rules.encode("utf-8")) > redaction.max_extra_rules_header_bytes:
+        raise HTTPException(status_code=400, detail="X-Redact-Extra-Rules header too large")
     try:
-        rules = [RuleConfig.model_validate(rule) for rule in json.loads(raw_rules)]
+        parsed = json.loads(raw_rules)
+        if not isinstance(parsed, list) or len(parsed) > redaction.max_extra_rules:
+            raise ValueError
+        rules = [RuleConfig.model_validate(rule) for rule in parsed]
+        if any(len(rule.value) > redaction.max_extra_rule_chars for rule in rules):
+            raise ValueError
+        if not redaction.allow_extra_regex_rules and any(rule.type == "regex" for rule in rules):
+            raise ValueError
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="invalid X-Redact-Extra-Rules header") from None
-    redaction = deepcopy(settings.redaction)
-    redaction.rules.extend(rules)
-    return SecretRedactor(redaction)
+    request_redaction = deepcopy(redaction)
+    request_redaction.rules.extend(rules)
+    return SecretRedactor(request_redaction)
+
+
+async def _read_request_body(request: Request, limit: int) -> bytes:
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            parsed_length = int(content_length)
+            if parsed_length < 0:
+                raise ValueError
+            if parsed_length > limit:
+                raise HTTPException(status_code=413, detail="request body too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="invalid Content-Length header") from None
+
+    chunks = []
+    size = 0
+    async for chunk in request.stream():
+        size += len(chunk)
+        if size > limit:
+            raise HTTPException(status_code=413, detail="request body too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _client_for_request(request: Request, settings: Settings) -> tuple[httpx.AsyncClient, bool]:
