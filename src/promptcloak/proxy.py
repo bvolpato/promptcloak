@@ -44,6 +44,14 @@ DROP_RESPONSE_HEADERS = {
     "proxy-authorization",
     "upgrade",
 }
+DROP_TRANSFORMED_RESPONSE_HEADERS = {
+    "content-digest",
+    "content-encoding",
+    "content-md5",
+    "digest",
+    "etag",
+    "repr-digest",
+}
 SENSITIVE_DEBUG_HEADERS = {
     "authorization",
     "cookie",
@@ -155,14 +163,10 @@ async def forward_request(request: Request, path: str) -> Response:
             await client.aclose()
         raise HTTPException(status_code=502, detail=f"upstream request failed: {exc}") from exc
 
-    response_headers = {
-        key: value
-        for key, value in upstream.headers.items()
-        if key.lower() not in DROP_RESPONSE_HEADERS
-    }
-
     if _is_streaming(upstream.headers):
-        stream = _stream_upstream(upstream, close_client, client)
+        transform_stream = compat_responses_to_chat
+        response_headers = _response_headers(upstream.headers, transformed=transform_stream)
+        stream = _stream_upstream(upstream, close_client, client, decoded=transform_stream)
         if compat_responses_to_chat:
             stream = chat_stream_to_responses(stream)
             response_headers["content-type"] = "text/event-stream; charset=utf-8"
@@ -173,7 +177,11 @@ async def forward_request(request: Request, path: str) -> Response:
             media_type=response_headers.get("content-type"),
         )
 
-    upstream_content = await upstream.aread()
+    transform_response = compat_responses_to_chat or settings.redaction.scan_responses
+    response_headers = _response_headers(upstream.headers, transformed=transform_response)
+    upstream_content = (
+        await upstream.aread() if transform_response else await _read_raw_upstream(upstream)
+    )
     await upstream.aclose()
     if close_client:
         await client.aclose()
@@ -423,15 +431,29 @@ def _is_streaming(headers: httpx.Headers) -> bool:
 
 
 async def _stream_upstream(
-    upstream: httpx.Response, close_client: bool, client: httpx.AsyncClient
+    upstream: httpx.Response,
+    close_client: bool,
+    client: httpx.AsyncClient,
+    *,
+    decoded: bool,
 ) -> AsyncIterator[bytes]:
     try:
-        async for chunk in upstream.aiter_bytes():
+        iterator = upstream.aiter_bytes() if decoded else upstream.aiter_raw()
+        async for chunk in iterator:
             yield chunk
     finally:
         await upstream.aclose()
         if close_client:
             await client.aclose()
+
+
+async def _read_raw_upstream(upstream: httpx.Response) -> bytes:
+    return b"".join([chunk async for chunk in upstream.aiter_raw()])
+
+
+def _response_headers(headers: httpx.Headers, *, transformed: bool) -> dict[str, str]:
+    dropped = DROP_RESPONSE_HEADERS | (DROP_TRANSFORMED_RESPONSE_HEADERS if transformed else set())
+    return {key: value for key, value in headers.items() if key.lower() not in dropped}
 
 
 app = create_app()

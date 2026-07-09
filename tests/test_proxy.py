@@ -1,3 +1,4 @@
+import gzip
 import json
 import logging
 
@@ -328,6 +329,92 @@ async def test_configured_target_key_is_not_forwarded_to_dynamic_target() -> Non
     assert response.status_code == 200
     assert "authorization" not in route.calls.last.request.headers
     assert "x-api-key" not in route.calls.last.request.headers
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compressed_response_is_forwarded_without_corruption() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(
+            200,
+            content=gzip.compress(b'{"ok":true}'),
+            headers={"content-type": "application/json", "content-encoding": "gzip"},
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post("/v1/responses", json={"input": "hello"})
+
+    assert response.status_code == 200
+    assert response.headers["content-encoding"] == "gzip"
+    assert response.json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compressed_scanned_response_drops_stale_representation_headers() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic", scan_responses=True),
+    )
+    secret = "sk-" + "FixtureToken000000000000000000000"
+    body = json.dumps({"content": secret}).encode()
+    respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(
+            200,
+            content=gzip.compress(body),
+            headers={
+                "content-type": "application/json",
+                "content-encoding": "gzip",
+                "etag": '"compressed-fixture"',
+            },
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post("/v1/responses", json={"input": "hello"})
+
+    assert response.status_code == 200
+    assert "content-encoding" not in response.headers
+    assert "etag" not in response.headers
+    assert response.json() == {"content": "[REDACTED_SECRET]"}
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_compressed_stream_is_forwarded_without_corruption() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    stream = b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+    respx.post("https://upstream.example/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            content=gzip.compress(stream),
+            headers={"content-type": "text/event-stream", "content-encoding": "gzip"},
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post("/v1/chat/completions", json={"messages": []})
+
+    assert response.status_code == 200
+    assert response.headers["content-encoding"] == "gzip"
+    assert "hello" in response.text
 
 
 @pytest.mark.asyncio
