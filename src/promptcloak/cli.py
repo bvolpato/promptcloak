@@ -84,6 +84,7 @@ def init(
         raise typer.BadParameter(f"{config} already exists")
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(config_template(target_base_url, target_api_key_env), encoding="utf-8")
+    config.chmod(0o600)
     typer.echo(f"created {config}")
 
 
@@ -95,6 +96,11 @@ def encrypt_rules(
     data = yaml.safe_load(config.read_text(encoding="utf-8")) or {}
     redaction = data.setdefault("redaction", {})
     rules = redaction.get("rules", [])
+    if redaction.get("encrypted_rules"):
+        if rules:
+            raise typer.BadParameter("config contains both plain and encrypted redaction rules")
+        typer.echo(f"redaction rules already encrypted in {config}")
+        return
     if not key_file.exists():
         write_key_file(key_file)
     encrypted = encrypt_text(yaml.safe_dump(rules, sort_keys=False), load_key(key_file))
@@ -102,6 +108,7 @@ def encrypt_rules(
     redaction["encrypted_rules"] = encrypted
     redaction["rules"] = []
     config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    config.chmod(0o600)
     typer.echo(f"encrypted redaction rules in {config}")
     typer.echo(f"key file {key_file}")
 

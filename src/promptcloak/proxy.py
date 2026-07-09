@@ -22,7 +22,7 @@ from promptcloak.compat import (
     chat_stream_to_responses,
     responses_to_chat_payload,
 )
-from promptcloak.config import RuleConfig, Settings, expand_env_values, get_settings, load_settings
+from promptcloak.config import RuleConfig, Settings, expand_env_values, get_settings
 from promptcloak.redaction import RedactionStats, SecretRedactor
 from promptcloak.version import __version__
 
@@ -527,10 +527,3 @@ async def _read_raw_upstream(upstream: httpx.Response) -> bytes:
 def _response_headers(headers: httpx.Headers, *, transformed: bool) -> dict[str, str]:
     dropped = DROP_RESPONSE_HEADERS | (DROP_TRANSFORMED_RESPONSE_HEADERS if transformed else set())
     return {key: value for key, value in headers.items() if key.lower() not in dropped}
-
-
-app = create_app()
-
-
-def reload_app_from_config() -> FastAPI:
-    return create_app(load_settings())

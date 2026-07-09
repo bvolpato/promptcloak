@@ -141,6 +141,9 @@ uv sync --extra dev
 uv run promptcloak doctor
 ```
 
+ASGI servers can load `promptcloak.asgi:app` directly. Importing CLI or proxy helpers does not
+load user config until a command or app explicitly requests it.
+
 ## Use as a library
 
 PromptCloak can run without proxy service. Import redaction helpers and filter request values before passing them to any SDK. PromptCloak does not install OpenAI, LiteLLM, LangChain, or Anthropic SDKs; examples assume those are already in your app.
