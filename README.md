@@ -379,6 +379,10 @@ curl http://127.0.0.1:8000/v1/responses \
 
 Set `X-Target-API-Key-Header: x-api-key` for Anthropic-style upstream authentication.
 
+Configured target keys are bound to `target.default_base_url`. A request that changes
+`X-Target-Base-URL` must also provide its matching `X-Target-API-Key` or
+`X-Target-Authorization`.
+
 Use `target.allowed_base_urls` for strict allowlists.
 
 ## Provider targets
@@ -674,6 +678,10 @@ helm install promptcloak ./charts/promptcloak \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
+export PROMPTCLOAK_SERVER_API_KEY="$(
+  kubectl get secret promptcloak-secret \
+    -o jsonpath='{.data.PROMPTCLOAK_SERVER_API_KEY}' | base64 --decode
+)"
 kubectl port-forward svc/promptcloak 8000:8000
 ```
 
@@ -705,6 +713,11 @@ helm install promptcloak ./promptcloak-0.1.5.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 ```
+
+Helm enables proxy authentication and generates a key by default. Pass
+`--set-string serverAuth.apiKey="$PROMPTCLOAK_SERVER_API_KEY"` to choose it. Send
+`Authorization: Bearer $PROMPTCLOAK_SERVER_API_KEY` on proxied requests. Health probes remain
+unauthenticated.
 
 ## Security model
 

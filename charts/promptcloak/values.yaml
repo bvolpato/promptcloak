@@ -9,6 +9,10 @@ service:
   type: ClusterIP
   port: 8000
 
+serverAuth:
+  enabled: true
+  apiKey: ""
+
 env:
   PROMPTCLOAK_HOST: 0.0.0.0
   PROMPTCLOAK_PORT: "8000"

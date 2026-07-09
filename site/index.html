@@ -401,6 +401,8 @@ curl -fsS http://127.0.0.1:8000/healthz</code></pre>
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
+export PROMPTCLOAK_SERVER_API_KEY="$(kubectl get secret promptcloak-secret \
+  -o jsonpath='{.data.PROMPTCLOAK_SERVER_API_KEY}' | base64 --decode)"
 kubectl port-forward svc/promptcloak 8000:8000
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>

@@ -306,6 +306,9 @@ def _is_private_host(host: str) -> bool:
 def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
     target_api_key = request.headers.get("x-target-api-key")
     target_authorization = request.headers.get("x-target-authorization")
+    configured_api_key = (
+        settings.target.api_key if _uses_configured_target(request, settings) else None
+    )
     target_api_key_header = (
         request.headers.get("x-target-api-key-header") or settings.target.api_key_header
     ).lower()
@@ -324,7 +327,7 @@ def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
         }:
             continue
         if lowered in CLIENT_AUTH_HEADERS:
-            has_target_auth = settings.target.api_key or target_api_key or target_authorization
+            has_target_auth = configured_api_key or target_api_key or target_authorization
             if has_target_auth or not settings.target.forward_client_authorization:
                 continue
         if lowered.startswith("x-redact-"):
@@ -334,9 +337,14 @@ def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
         _set_target_api_key(headers, target_api_key, target_api_key_header)
     elif target_authorization:
         headers["authorization"] = target_authorization
-    elif settings.target.api_key:
-        _set_target_api_key(headers, settings.target.api_key, target_api_key_header)
+    elif configured_api_key:
+        _set_target_api_key(headers, configured_api_key, target_api_key_header)
     return headers
+
+
+def _uses_configured_target(request: Request, settings: Settings) -> bool:
+    override = request.headers.get("x-target-base-url")
+    return not override or override.rstrip("/") == settings.target.default_base_url.rstrip("/")
 
 
 def _set_target_api_key(headers: dict[str, str], api_key: str, header: str) -> None:

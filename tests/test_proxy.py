@@ -304,6 +304,34 @@ async def test_target_api_key_header_overrides_configured_target_key() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_configured_target_key_is_not_forwarded_to_dynamic_target() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://provider.example/v1",
+            api_key="configured-token",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://other.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Target-Base-URL": "https://other.example/v1"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    assert "authorization" not in route.calls.last.request.headers
+    assert "x-api-key" not in route.calls.last.request.headers
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_debug_requests_log_raw_and_redacted_bodies(caplog: pytest.LogCaptureFixture) -> None:
     settings = Settings(
         server=ServerConfig(debug_requests=True),

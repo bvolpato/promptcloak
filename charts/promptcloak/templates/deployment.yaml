@@ -21,16 +21,25 @@ spec:
           ports:
             - containerPort: 8000
           env:
+            {{- if .Values.serverAuth.enabled }}
+            - name: PROMPTCLOAK_SERVER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "promptcloak.fullname" . }}-secret
+                  key: PROMPTCLOAK_SERVER_API_KEY
+            {{- end }}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
             {{- range $key, $value := .Values.secretEnv }}
+            {{- if or (ne $key "PROMPTCLOAK_SERVER_API_KEY") (not $.Values.serverAuth.enabled) }}
             - name: {{ $key }}
               valueFrom:
                 secretKeyRef:
                   name: {{ include "promptcloak.fullname" $ }}-secret
                   key: {{ $key }}
+            {{- end }}
             {{- end }}
           readinessProbe:
             httpGet:
