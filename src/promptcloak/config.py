@@ -4,6 +4,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -36,16 +37,32 @@ class TargetConfig(BaseModel):
     @field_validator("default_base_url")
     @classmethod
     def validate_base_url(cls, value: str) -> str:
-        value = value.rstrip("/")
-        if not value.startswith(("http://", "https://")):
-            raise ValueError("target base URL must start with http:// or https://")
-        return value
+        return _validated_base_url(value)
+
+    @field_validator("allowed_base_urls")
+    @classmethod
+    def validate_allowed_base_urls(cls, values: list[str]) -> list[str]:
+        return [_validated_base_url(value) for value in values]
 
 
 class RuleConfig(BaseModel):
     type: Literal["exact", "regex"]
     value: str
     name: str | None = None
+
+
+def _validated_base_url(value: str) -> str:
+    value = value.rstrip("/")
+    parsed = urlsplit(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("target base URL must use http:// or https:// with a hostname")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise ValueError("target base URL cannot contain userinfo, query, or fragment")
+    try:
+        _ = parsed.port
+    except ValueError:
+        raise ValueError("target base URL has invalid port") from None
+    return value
 
 
 class RedactionConfig(BaseModel):

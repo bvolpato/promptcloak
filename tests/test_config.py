@@ -1,4 +1,7 @@
-from promptcloak.config import load_settings
+import pytest
+from pydantic import ValidationError
+
+from promptcloak.config import TargetConfig, load_settings
 
 
 def test_server_api_key_env(monkeypatch, tmp_path) -> None:
@@ -19,3 +22,19 @@ def test_server_api_key_env(monkeypatch, tmp_path) -> None:
     assert settings.target.api_key_header == "x-api-key"
     assert settings.target.default_base_url == "https://upstream.example/v1"
     assert settings.compat.responses_to_chat is True
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://",
+        "ftp://provider.example/v1",
+        "https://user:pass@provider.example/v1",
+        "https://provider.example/v1?key=value",
+        "https://provider.example/v1#fragment",
+        "https://provider.example:invalid/v1",
+    ],
+)
+def test_target_base_urls_reject_ambiguous_values(url: str) -> None:
+    with pytest.raises(ValidationError):
+        TargetConfig(default_base_url=url)

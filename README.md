@@ -387,7 +387,8 @@ Configured target keys are bound to `target.default_base_url`. A request that ch
 `X-Target-Base-URL` must also provide its matching `X-Target-API-Key` or
 `X-Target-Authorization`.
 
-Use `target.allowed_base_urls` for strict allowlists.
+Dynamic target overrides require `target.allowed_base_urls` while private-target protection is
+enabled. Set `block_private_targets: false` only for trusted local targets.
 
 Per-request rules are exact matches by default. Regex rules remain available in trusted config.
 Set `redaction.allow_extra_regex_rules: true` only for authenticated clients you trust.

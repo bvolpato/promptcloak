@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import json
 import logging
+import posixpath
 import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -106,7 +108,7 @@ async def forward_request(request: Request, path: str) -> Response:
     _check_proxy_auth(request, settings)
     target_path = path
     target_url = _target_url(request, target_path, settings)
-    _validate_target(target_url, settings)
+    await _validate_target(target_url, settings, dynamic=_uses_dynamic_target(request, settings))
 
     body = await _read_request_body(request, settings.server.max_request_body_bytes)
     redactor = _redactor_for_request(request, settings)
@@ -139,7 +141,9 @@ async def forward_request(request: Request, path: str) -> Response:
             )
         target_path = "/v1/chat/completions"
         target_url = _target_url(request, target_path, settings)
-        _validate_target(target_url, settings)
+        await _validate_target(
+            target_url, settings, dynamic=_uses_dynamic_target(request, settings)
+        )
         content = json.dumps(responses_to_chat_payload(json_payload), separators=(",", ":")).encode(
             "utf-8"
         )
@@ -311,36 +315,73 @@ def _target_url(request: Request, path: str, settings: Settings) -> str:
     return urlunsplit((base_parts.scheme, base_parts.netloc, final_path, "", ""))
 
 
-def _validate_target(target_url: str, settings: Settings) -> None:
+async def _validate_target(target_url: str, settings: Settings, *, dynamic: bool) -> None:
     parsed = urlsplit(target_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise HTTPException(status_code=400, detail="invalid target URL")
+    try:
+        _ = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid target URL") from None
     if parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="target URL userinfo not allowed")
     allowed = settings.target.allowed_base_urls
+    if dynamic and settings.target.block_private_targets and not allowed:
+        raise HTTPException(status_code=403, detail="dynamic target requires allowlist")
     if allowed and not any(_target_matches_allowed_url(target_url, url) for url in allowed):
         raise HTTPException(status_code=403, detail="target URL not allowed")
-    if settings.target.block_private_targets and _is_private_host(parsed.hostname):
-        raise HTTPException(status_code=403, detail="private target URL blocked")
+    if settings.target.block_private_targets:
+        try:
+            private = await asyncio.to_thread(_is_private_host, parsed.hostname)
+        except socket.gaierror:
+            raise HTTPException(
+                status_code=400, detail="target host could not be resolved"
+            ) from None
+        if private:
+            raise HTTPException(status_code=403, detail="private target URL blocked")
 
 
 def _target_matches_allowed_url(target_url: str, allowed_url: str) -> bool:
-    allowed = allowed_url.rstrip("/")
-    return target_url == allowed or target_url.startswith(allowed + "/")
+    target = urlsplit(target_url)
+    allowed = urlsplit(allowed_url)
+    if (
+        target.scheme.lower() != allowed.scheme.lower()
+        or target.hostname != allowed.hostname
+        or _effective_port(target) != _effective_port(allowed)
+    ):
+        return False
+    target_path = _normalized_url_path(target.path)
+    allowed_path = _normalized_url_path(allowed.path).rstrip("/")
+    return (
+        not allowed_path
+        or target_path == allowed_path
+        or target_path.startswith(allowed_path + "/")
+    )
+
+
+def _effective_port(parsed: Any) -> int | None:
+    if parsed.port:
+        return parsed.port
+    return {"http": 80, "https": 443}.get(parsed.scheme.lower())
+
+
+def _normalized_url_path(path: str) -> str:
+    return posixpath.normpath("/" + unquote(path).lstrip("/"))
 
 
 def _is_private_host(host: str) -> bool:
-    if host in {"localhost", "127.0.0.1", "::1"}:
-        return True
     try:
+        ips = [ipaddress.ip_address(host)]
+    except ValueError:
         addresses = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        return False
-    for address in addresses:
-        ip = ipaddress.ip_address(address[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local:
-            return True
-    return False
+        ips = [ipaddress.ip_address(address[4][0]) for address in addresses]
+    return not ips or any(not ip.is_global for ip in ips)
+
+
+def _uses_dynamic_target(request: Request, settings: Settings) -> bool:
+    return bool(request.headers.get("x-target-base-url")) and not _uses_configured_target(
+        request, settings
+    )
 
 
 def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:

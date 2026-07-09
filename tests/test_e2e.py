@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 
 import httpx
 import pytest
@@ -176,6 +177,26 @@ async def test_e2e_target_url_userinfo_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
+async def test_e2e_target_url_invalid_port_is_rejected() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        )
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Target-Base-URL": "https://upstream.example:invalid/v1"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid target URL"
+
+
+@pytest.mark.asyncio
 async def test_e2e_target_allowlist_rejects_prefix_lookalike() -> None:
     settings = Settings(
         target=TargetConfig(
@@ -189,6 +210,74 @@ async def test_e2e_target_allowlist_rejects_prefix_lookalike() -> None:
         response = await client.post(
             "/v1/responses",
             headers={"X-Target-Base-URL": "https://allowed.example/v1.evil"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "target URL not allowed"
+
+
+@pytest.mark.asyncio
+async def test_e2e_dynamic_target_requires_allowlist_by_default() -> None:
+    settings = Settings(target=TargetConfig(default_base_url="https://configured.example/v1"))
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Target-Base-URL": "https://dynamic.example/v1"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "dynamic target requires allowlist"
+
+
+@pytest.mark.asyncio
+async def test_e2e_private_target_resolution_fails_closed(monkeypatch) -> None:
+    settings = Settings(target=TargetConfig(default_base_url="https://configured.example/v1"))
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))],
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post("/v1/responses", json={"input": "hello"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "private target URL blocked"
+
+
+@pytest.mark.asyncio
+async def test_e2e_unresolved_target_is_rejected(monkeypatch) -> None:
+    settings = Settings(target=TargetConfig(default_base_url="https://configured.example/v1"))
+
+    def fail_resolution(*_args, **_kwargs):
+        raise socket.gaierror
+
+    monkeypatch.setattr(socket, "getaddrinfo", fail_resolution)
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post("/v1/responses", json={"input": "hello"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "target host could not be resolved"
+
+
+@pytest.mark.asyncio
+async def test_e2e_allowlist_rejects_path_traversal() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://allowed.example/v1",
+            allowed_base_urls=["https://allowed.example/v1"],
+            block_private_targets=False,
+        )
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/admin",
+            headers={"X-Target-Base-URL": "https://allowed.example/v1/.."},
             json={"input": "hello"},
         )
 
