@@ -1,3 +1,7 @@
+import tempfile
+
+import requests
+
 from promptcloak.config import RedactionConfig, RuleConfig
 from promptcloak.redaction import SecretRedactor
 from tests.fixtures import EXPANDED_PROVIDER_FIXTURES, OPENAI_FAKE, PROVIDER_FIXTURES
@@ -204,6 +208,42 @@ def test_detect_secrets_engine_redacts_api_key_assignment() -> None:
 
     assert OPENAI_FAKE not in result.value
     assert any(name.startswith("detect_secrets:") for name in result.stats.rule_hits)
+
+
+def test_detect_secrets_scans_in_memory(monkeypatch) -> None:
+    def reject_temp_file(*_args, **_kwargs):
+        raise AssertionError("redaction attempted to write a temporary file")
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", reject_temp_file)
+    redactor = SecretRedactor(RedactionConfig(engine="detect-secrets"))
+
+    result = redactor.redact_text(f"OPENAI_API_KEY={OPENAI_FAKE}")
+
+    assert OPENAI_FAKE not in result.value
+
+
+def test_detect_secrets_scans_multiline_text_in_memory() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="detect-secrets"))
+    text = f"first=value\nOPENAI_API_KEY={OPENAI_FAKE}\nlast=value"
+
+    result = redactor.redact_text(text)
+
+    assert OPENAI_FAKE not in result.value
+    assert result.value.splitlines()[0] == "first=value"
+    assert result.value.splitlines()[2] == "last=value"
+
+
+def test_detect_secrets_scan_does_not_make_network_requests(monkeypatch) -> None:
+    def reject_network(*_args, **_kwargs):
+        raise AssertionError("redaction attempted a network request")
+
+    monkeypatch.setattr(requests.sessions.Session, "request", reject_network)
+    redactor = SecretRedactor(RedactionConfig(engine="detect-secrets"))
+    stripe_fixture = "sk_" + "live_" + ("A" * 24)
+
+    result = redactor.redact_text(f"STRIPE_API_KEY={stripe_fixture}")
+
+    assert stripe_fixture not in result.value
 
 
 def test_detect_secrets_engine_does_not_redact_entropy_only_string() -> None:

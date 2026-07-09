@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-import os
+import io
 import re
-import tempfile
 from collections.abc import Mapping
-from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -219,34 +217,31 @@ class SecretRedactor:
     def _run_detect_secrets(self, value: str, stats: RedactionStats) -> str:
         if not value.strip():
             return value
-        from detect_secrets import SecretsCollection
         from detect_secrets.core.plugins.util import get_mapping_from_secret_type_to_class
+        from detect_secrets.core.scan import scan_line
         from detect_secrets.settings import transient_settings
+        from detect_secrets.transformers import get_transformed_file
 
-        temp_file_name = ""
-        try:
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                temp_file.write(value.encode("utf-8"))
-                temp_file_name = temp_file.name
-            plugin_config = [
-                {"name": plugin_type.__name__}
-                for plugin_type in get_mapping_from_secret_type_to_class().values()
-                if plugin_type.__name__ not in {"Base64HighEntropyString", "HexHighEntropyString"}
-            ]
-            with transient_settings({"plugins_used": plugin_config}):
-                secrets = SecretsCollection()
-                secrets.scan_file(temp_file_name)
-        finally:
-            with suppress(OSError):
-                os.remove(temp_file_name)
+        plugin_config = [
+            {"name": plugin_type.__name__}
+            for plugin_type in get_mapping_from_secret_type_to_class().values()
+            if plugin_type.__name__ not in {"Base64HighEntropyString", "HexHighEntropyString"}
+        ]
+        source = _PromptText(value)
+        lines = get_transformed_file(source) or value.splitlines()
+        source.seek(0)
+        eager_lines = get_transformed_file(source, use_eager_transformers=True) or []
+        with transient_settings({"plugins_used": plugin_config}):
+            found_secrets = [secret for line in lines for secret in scan_line(line)]
+            if not found_secrets:
+                found_secrets = [secret for line in eager_lines for secret in scan_line(line)]
 
-        for file_name in secrets.files:
-            for found_secret in secrets[file_name]:
-                secret_value = getattr(found_secret, "secret_value", None)
-                if not secret_value:
-                    continue
-                value, count = self._replace_detected_secret(secret_value, value)
-                stats.add(f"detect_secrets:{found_secret.type}", count)
+        for found_secret in found_secrets:
+            secret_value = getattr(found_secret, "secret_value", None)
+            if not secret_value:
+                continue
+            value, count = self._replace_detected_secret(secret_value, value)
+            stats.add(f"detect_secrets:{found_secret.type}", count)
         return value
 
     def _replace_detected_secret(self, secret_value: str, value: str) -> tuple[str, int]:
@@ -290,3 +285,7 @@ class SecretRedactor:
             return self.placeholder
         digest = hashlib.sha256(secret.encode("utf-8")).hexdigest()[:8]
         return f"{secret[:4]}...{secret[-4:]}:{digest}"
+
+
+class _PromptText(io.StringIO):
+    name = "promptcloak-input"

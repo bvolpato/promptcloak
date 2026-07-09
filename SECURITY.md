@@ -12,6 +12,7 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 
 - No telemetry, analytics, or phone-home behavior.
 - Redaction runs locally with deterministic `detect-secrets` plugins plus provider rules.
+- Request scanning stays in memory and does not write prompt bodies to temporary files.
 - Audit logs contain redaction counts and rule names, not secret values.
 - Upstream auth headers are never forwarded unless explicitly configured.
 - Private/loopback target URLs are blocked by default to reduce SSRF risk.
