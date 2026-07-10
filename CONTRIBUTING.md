@@ -23,13 +23,13 @@ uv build
 Release tags create GitHub releases through `.github/workflows/release.yml`.
 
 ```bash
-VERSION=0.1.2
+VERSION=0.1.6
 uv run scripts/check_release.py --tag "v${VERSION}"
 uv run scripts/audit_secrets.py
 uv run ruff check .
 uv run pytest
 uv build
-git tag -a "v${VERSION}" -m "PromptCloak ${VERSION}"
+git tag -s "v${VERSION}" -m "PromptCloak ${VERSION}"
 git push origin main "v${VERSION}"
 ```
 
@@ -38,9 +38,18 @@ Before tagging, keep these versions identical:
 - `pyproject.toml`
 - `src/promptcloak/version.py`
 - `charts/promptcloak/Chart.yaml`
+- `charts/promptcloak/values.yaml`
+- `uv.lock`
 
 The release workflow reruns checks, builds source/wheel/Helm artifacts, writes `SHA256SUMS`,
 attests build provenance, publishes an SBOM-backed container image, and uploads release assets.
+
+If a downstream publishing step fails after release creation, fix workflow on `main` and rerun
+existing immutable tag:
+
+```bash
+gh workflow run release.yml --ref main -f tag="v${VERSION}"
+```
 
 ## Secret Hygiene
 

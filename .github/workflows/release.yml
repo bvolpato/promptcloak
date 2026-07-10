@@ -4,6 +4,15 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   attestations: write
@@ -18,10 +27,11 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          ref: ${{ env.RELEASE_TAG }}
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - run: uv sync --extra dev --frozen
-      - run: uv run scripts/check_release.py --tag "$GITHUB_REF_NAME"
+      - run: uv run scripts/check_release.py --tag "$RELEASE_TAG"
       - run: uv run scripts/audit_secrets.py
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -37,12 +47,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* \
+            gh release create "$RELEASE_TAG" dist/* \
               --repo "$GITHUB_REPOSITORY" \
-              --title "PromptCloak ${GITHUB_REF_NAME#v}" \
+              --title "PromptCloak ${RELEASE_TAG#v}" \
               --generate-notes \
               --verify-tag
           fi
@@ -51,14 +61,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         id: docker-meta
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=raw,value=${{ github.ref_name }}
-            type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=${{ env.RELEASE_TAG }}
+            type=semver,pattern={{version}},value=${{ env.RELEASE_TAG }}
       - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
