@@ -405,7 +405,7 @@ wheels = [
 
 [[package]]
 name = "promptcloak"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "bc-detect-secrets" },
