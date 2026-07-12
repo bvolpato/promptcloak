@@ -20,7 +20,10 @@ Tag triggers `.github/workflows/release.yml`. Workflow publishes GitHub assets a
 
 ## Homebrew
 
-After release assets exist, update `Formula/promptcloak.rb` in `/home/bruno/githubworkspace/homebrew-tap` with release source URL, checksum, and Python resources. Test formula before signed commit and push.
+After release assets exist, update `Formula/promptcloak.rb` in
+`/home/bruno/githubworkspace/homebrew-tap` with release source URL, checksum, and Python
+resources. Reject generated resource versions uploaded less than three days ago; use tested
+`uv.lock` version until cooldown expires. Test formula before signed commit and push.
 
 ## GitHub Pages
 
