@@ -28,7 +28,12 @@ helm lint ./charts/promptcloak
 ```bash
 systemctl --user is-enabled promptcloak.service
 systemctl --user is-active promptcloak.service
+curl -fsS http://127.0.0.1:8000/healthz
+curl -fsS http://127.0.0.1:8000/openapi.json | jq -r .info.version
+docker exec promptcloak-local promptcloak version
 curl -fsS http://127.0.0.1:8787/healthz
 ```
 
-Health must report redaction enabled, `detect-secrets`, and `telemetry:false`.
+Both health endpoints must report redaction enabled, `detect-secrets`, and `telemetry:false`.
+Both runtimes must report release version. `promptcloak-local` must bind loopback, restart unless
+stopped, and run with raw-request debug off.

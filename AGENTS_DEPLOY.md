@@ -28,10 +28,15 @@ Publish exact contents of `site/` to root of `gh-pages`, commit, and push. Pages
 
 ## Local service
 
-Restart installed user service after release:
+Restart installed source service after release. It listens on `127.0.0.1:8000`:
 
 ```bash
 systemctl --user restart promptcloak.service
 ```
+
+OpenCode uses `promptcloak-local` on `127.0.0.1:8787`. Recreate that container from released
+GHCR image with loopback binding, `unless-stopped`, raw-request debug off, and configured target
+base URL matching OpenCode `X-Target-Base-URL`. Keep upstream key in OpenCode header config; do not
+put it in container environment.
 
 Never persist or print upstream credentials during deployment checks.
