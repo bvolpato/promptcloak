@@ -2,7 +2,7 @@ services:
   promptcloak:
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       PROMPTCLOAK_TARGET_BASE_URL: https://api.openai.com/v1
       PROMPTCLOAK_TARGET_API_KEY: ${OPENAI_API_KEY}

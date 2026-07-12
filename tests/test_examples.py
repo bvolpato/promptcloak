@@ -8,6 +8,12 @@ from promptcloak.config import Settings
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_compose_binds_proxy_to_loopback() -> None:
+    data = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+
+    assert data["services"]["promptcloak"]["ports"] == ["127.0.0.1:8000:8000"]
+
+
 def test_openrouter_promptcloak_example_is_valid() -> None:
     data = yaml.safe_load((ROOT / "examples" / "promptcloak-openrouter.config.yaml").read_text())
     settings = Settings.model_validate(data)
