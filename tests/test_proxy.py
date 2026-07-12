@@ -51,8 +51,7 @@ async def test_proxy_redacts_query_parameters_and_preserves_duplicates() -> None
     settings = Settings(
         target=TargetConfig(
             default_base_url="https://upstream.example/v1", block_private_targets=False
-        ),
-        redaction=RedactionConfig(engine="basic"),
+        )
     )
     route = respx.post("https://upstream.example/v1/chat/completions").mock(
         return_value=httpx.Response(200, json={"ok": True})
@@ -79,8 +78,7 @@ async def test_proxy_redacts_multipart_body_without_corrupting_binary_bytes() ->
     settings = Settings(
         target=TargetConfig(
             default_base_url="https://upstream.example/v1", block_private_targets=False
-        ),
-        redaction=RedactionConfig(engine="basic"),
+        )
     )
     route = respx.post("https://upstream.example/v1/files").mock(
         return_value=httpx.Response(200, json={"ok": True})
