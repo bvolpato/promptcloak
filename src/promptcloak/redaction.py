@@ -24,6 +24,10 @@ class RedactionStats:
         self.redactions += count
         self.rule_hits[name] = self.rule_hits.get(name, 0) + count
 
+    def merge(self, other: RedactionStats) -> None:
+        for name, count in other.rule_hits.items():
+            self.add(name, count)
+
 
 @dataclass
 class RedactionResult:

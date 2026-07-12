@@ -20,6 +20,7 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 ## Limitations
 
 - PromptCloak protects request bodies before forwarding. It cannot protect credentials intentionally used as upstream authentication.
+- Encoded request bodies must be decompressed before redaction.
 - Emergency request tracing can print raw request bodies locally.
 - Streaming response redaction is intentionally not attempted.
 - Detection quality depends on known provider formats, labeled values, connection-string shapes, and configured tail/regex rules.

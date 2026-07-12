@@ -47,6 +47,115 @@ async def test_proxy_redacts_and_forwards_json() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_proxy_redacts_query_parameters_and_preserves_duplicates() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/chat/completions",
+            params=[("api_key", OPENAI_FAKE), ("tag", "one"), ("tag", "two")],
+            json={"messages": []},
+        )
+
+    assert response.status_code == 200
+    forwarded = route.calls.last.request
+    assert OPENAI_FAKE not in str(forwarded.url)
+    assert forwarded.url.params["api_key"] == "[REDACTED_SECRET]"
+    assert forwarded.url.params.get_list("tag") == ["one", "two"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_redacts_multipart_body_without_corrupting_binary_bytes() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/files").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+    binary_marker = b"\xff\x00\xfe"
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/files",
+            files={
+                "file": (
+                    "fixture.bin",
+                    binary_marker + OPENAI_FAKE.encode(),
+                    "application/octet-stream",
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    forwarded = route.calls.last.request.content
+    assert OPENAI_FAKE.encode() not in forwarded
+    assert b"[REDACTED_SECRET]" in forwarded
+    assert binary_marker in forwarded
+
+
+@pytest.mark.asyncio
+async def test_proxy_rejects_encoded_request_bodies() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Content-Type": "application/json", "Content-Encoding": "gzip"},
+            content=gzip.compress(json.dumps({"input": OPENAI_FAKE}).encode()),
+        )
+
+    assert response.status_code == 415
+    assert response.json()["detail"] == "encoded request bodies are not supported"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_preserves_encoded_body_when_redaction_is_disabled() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        ),
+        redaction=RedactionConfig(enabled=False),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+    body = gzip.compress(json.dumps({"input": OPENAI_FAKE}).encode())
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Content-Type": "application/json", "Content-Encoding": "gzip"},
+            content=body,
+        )
+
+    assert response.status_code == 200
+    assert route.calls.last.request.content == body
+    assert route.calls.last.request.headers["content-encoding"] == "gzip"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_x_target_base_url_overrides_target() -> None:
     settings = Settings(
         target=TargetConfig(

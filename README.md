@@ -631,6 +631,10 @@ Coverage includes fixture-shaped examples for:
 - JSON object fields named like `api_key`, `token`, `secret`, `password`, `authorization`, `credentials`, `signed_url`, or `sas_token`
 - User exact-tail and regex rules
 
+JSON is scanned structurally. Query parameters and unencoded non-JSON bodies, including
+multipart requests, are scanned without changing unrelated bytes. Encoded request bodies are
+rejected while redaction is enabled; decompress them before sending.
+
 Every scan is local. PromptCloak never calls an LLM to detect secrets. Entropy-only
 matching is intentionally disabled; use custom rules for opaque internal formats.
 

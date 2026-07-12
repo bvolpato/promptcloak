@@ -113,25 +113,35 @@ async def forward_request(request: Request, path: str) -> Response:
     body = await _read_request_body(request, settings.server.max_request_body_bytes)
     redactor = _redactor_for_request(request, settings)
     audit: AuditLogger = request.app.state.audit
+    query_params, query_stats = _redact_query_params(request, redactor)
+    audit.redaction(f"query:{path}", query_stats)
     content = body
-    stats = RedactionStats()
+    stats = query_stats
     json_payload: Any | None = None
+    encoded_body = request.headers.get("content-encoding", "identity").lower() != "identity"
 
-    if body and _is_json_request(request):
+    if body and encoded_body and settings.redaction.enabled:
+        raise HTTPException(status_code=415, detail="encoded request bodies are not supported")
+    if body and not encoded_body and _is_json_request(request):
         try:
             json_payload = json.loads(body)
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="invalid JSON request body") from None
         result = redactor.redact_payload(json_payload)
         json_payload = result.value
-        stats = result.stats
+        stats.merge(result.stats)
         audit.redaction(path, result.stats)
         content = json.dumps(json_payload, separators=(",", ":")).encode("utf-8")
-    elif body and _is_text_request(request):
+    elif body and not encoded_body and _is_text_request(request):
         result = redactor.redact_text(body.decode("utf-8", errors="replace"))
-        stats = result.stats
+        stats.merge(result.stats)
         audit.redaction(path, result.stats)
         content = result.value.encode("utf-8")
+    elif body and not encoded_body:
+        result = redactor.redact_text(body.decode("utf-8", errors="surrogateescape"))
+        stats.merge(result.stats)
+        audit.redaction(path, result.stats)
+        content = result.value.encode("utf-8", errors="surrogateescape")
 
     compat_responses_to_chat = _should_bridge_responses_to_chat(request, path, settings)
     if compat_responses_to_chat:
@@ -159,7 +169,7 @@ async def forward_request(request: Request, path: str) -> Response:
             target_url,
             content=content,
             headers=headers,
-            params=request.query_params,
+            params=query_params,
         )
         upstream = await client.send(upstream_request, stream=True)
     except httpx.RequestError as exc:
@@ -275,6 +285,18 @@ async def _read_request_body(request: Request, limit: int) -> bytes:
             raise HTTPException(status_code=413, detail="request body too large")
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+def _redact_query_params(
+    request: Request, redactor: SecretRedactor
+) -> tuple[list[tuple[str, str]], RedactionStats]:
+    redacted: list[tuple[str, str]] = []
+    stats = RedactionStats()
+    for key, value in request.query_params.multi_items():
+        result = redactor.redact_payload({key: value})
+        stats.merge(result.stats)
+        redacted.append((key, result.value[key]))
+    return redacted, stats
 
 
 def _client_for_request(request: Request, settings: Settings) -> tuple[httpx.AsyncClient, bool]:
@@ -496,7 +518,8 @@ def _is_text_request(request: Request) -> bool:
 
 
 def _is_json_content(headers: httpx.Headers | Any) -> bool:
-    return "application/json" in headers.get("content-type", "").lower()
+    media_type = headers.get("content-type", "").partition(";")[0].strip().lower()
+    return media_type == "application/json" or media_type.endswith("+json")
 
 
 def _is_streaming(headers: httpx.Headers) -> bool:
