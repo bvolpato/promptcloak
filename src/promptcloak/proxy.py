@@ -23,6 +23,7 @@ from promptcloak.compat import (
     responses_to_chat_payload,
 )
 from promptcloak.config import RuleConfig, Settings, expand_env_values, get_settings
+from promptcloak.patterns import SENSITIVE_FIELD_RE
 from promptcloak.redaction import RedactionStats, SecretRedactor
 from promptcloak.version import __version__
 
@@ -494,7 +495,11 @@ def _debug_headers(request: Request) -> dict[str, str]:
     headers: dict[str, str] = {}
     for key, value in request.headers.items():
         lowered = key.lower()
-        if lowered in SENSITIVE_DEBUG_HEADERS or lowered.startswith("x-redact-"):
+        if (
+            lowered in SENSITIVE_DEBUG_HEADERS
+            or lowered.startswith("x-redact-")
+            or SENSITIVE_FIELD_RE.search(lowered)
+        ):
             headers[key] = "[REDACTED_HEADER]"
         else:
             headers[key] = value

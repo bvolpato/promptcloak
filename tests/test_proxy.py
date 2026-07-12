@@ -640,7 +640,12 @@ async def test_debug_requests_log_raw_and_redacted_bodies(caplog: pytest.LogCapt
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
             response = await client.post(
                 "/v1/chat/completions",
-                headers={"X-Target-API-Key": "upstream-token"},
+                headers={
+                    "Proxy-Authorization": f"Bearer {OPENAI_FAKE}",
+                    "X-Custom-Secret": OPENAI_FAKE,
+                    "X-Request-ID": "fixture-request",
+                    "X-Target-API-Key": "upstream-token",
+                },
                 json={"messages": [{"role": "user", "content": f"key {OPENAI_FAKE}"}]},
             )
 
@@ -657,6 +662,9 @@ async def test_debug_requests_log_raw_and_redacted_bodies(caplog: pytest.LogCapt
     assert OPENAI_FAKE in event["raw_body"]
     assert OPENAI_FAKE not in event["redacted_body"]
     assert "[REDACTED_SECRET]" in event["redacted_body"]
+    assert event["headers"]["proxy-authorization"] == "[REDACTED_HEADER]"
+    assert event["headers"]["x-custom-secret"] == "[REDACTED_HEADER]"
+    assert event["headers"]["x-request-id"] == "fixture-request"
     assert event["headers"]["x-target-api-key"] == "[REDACTED_HEADER]"
 
 
