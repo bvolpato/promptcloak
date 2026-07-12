@@ -1,7 +1,28 @@
+import stat
+
 import yaml
 
 from promptcloak.config import RedactionConfig, Settings, load_settings
-from promptcloak.security import encrypt_text, load_key, write_key_file
+from promptcloak.security import encrypt_text, load_key, write_key_file, write_private_text
+
+
+def test_private_writes_replace_insecure_file_mode(tmp_path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text("old", encoding="utf-8")
+    path.chmod(0o644)
+
+    write_private_text(path, "new")
+
+    assert path.read_text(encoding="utf-8") == "new"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+
+
+def test_key_file_is_private(tmp_path) -> None:
+    key_file = tmp_path / "key"
+
+    write_key_file(key_file)
+
+    assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
 
 
 def test_encrypted_rules_load(tmp_path) -> None:

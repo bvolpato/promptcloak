@@ -12,7 +12,7 @@ import yaml
 from promptcloak.config import DEFAULT_CONFIG_PATH, DEFAULT_KEY_PATH, config_template, load_settings
 from promptcloak.proxy import create_app
 from promptcloak.redaction import SecretRedactor
-from promptcloak.security import encrypt_text, load_key, write_key_file
+from promptcloak.security import encrypt_text, load_key, write_key_file, write_private_text
 from promptcloak.version import __version__
 
 app = typer.Typer(help="PromptCloak local secret-redacting LLM proxy.")
@@ -82,9 +82,7 @@ def init(
 ) -> None:
     if config.exists() and not force:
         raise typer.BadParameter(f"{config} already exists")
-    config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text(config_template(target_base_url, target_api_key_env), encoding="utf-8")
-    config.chmod(0o600)
+    write_private_text(config, config_template(target_base_url, target_api_key_env))
     typer.echo(f"created {config}")
 
 
@@ -107,8 +105,7 @@ def encrypt_rules(
     redaction["encrypted"] = True
     redaction["encrypted_rules"] = encrypted
     redaction["rules"] = []
-    config.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    config.chmod(0o600)
+    write_private_text(config, yaml.safe_dump(data, sort_keys=False))
     typer.echo(f"encrypted redaction rules in {config}")
     typer.echo(f"key file {key_file}")
 

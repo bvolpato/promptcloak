@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import os
 import secrets
+import tempfile
 from pathlib import Path
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -22,10 +23,31 @@ def load_key(key_file: Path) -> bytes:
 
 def write_key_file(key_file: Path) -> str:
     key = generate_key()
-    key_file.parent.mkdir(parents=True, exist_ok=True)
-    key_file.write_text(key + "\n", encoding="utf-8")
-    key_file.chmod(KEY_FILE_MODE)
+    write_private_text(key_file, key + "\n")
     return key
+
+
+def write_private_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            os.fchmod(handle.fileno(), KEY_FILE_MODE)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
 
 
 def encrypt_text(plaintext: str, key: bytes) -> str:
