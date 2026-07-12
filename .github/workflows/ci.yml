@@ -20,9 +20,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - run: uv python install "${{ matrix.python-version }}"
-      - run: uv sync --python "${{ matrix.python-version }}" --extra dev --frozen
+      - run: uv sync --python "${{ matrix.python-version }}" --extra dev --locked
       - run: uv run pytest
 
   package:
@@ -32,9 +33,10 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-      - run: uv sync --extra dev --frozen
+      - run: uv sync --extra dev --locked
       - run: uv run scripts/check_release.py
       - run: uv run scripts/audit_secrets.py
       - run: uv run ruff check .
