@@ -1,13 +1,13 @@
 # Integrate PromptCloak
 
-Integrate PromptCloak into this project so secrets in LLM request content are
-redacted before leaving the machine or application process. Complete setup,
-configuration, and verification. Follow existing project conventions.
+Integrate PromptCloak so secrets in LLM request content are redacted before they
+leave this machine or application process. Complete setup, configuration, and
+verification while following existing project conventions.
 
 ## Before editing
 
 1. Inspect current LLM clients, agent configs, package manager, runtime, and deployment model.
-2. Read current PromptCloak README and use its current release commands. Do not assume a PyPI release exists.
+2. Read current PromptCloak README and use its current release commands. PromptCloak is distributed through GitHub releases rather than PyPI.
 3. Choose proxy mode or Python library mode based on where requests are created.
 4. Keep changes limited to PromptCloak integration and required documentation.
 
@@ -62,23 +62,20 @@ uv add \
 
 ## Security rules
 
-- Never print, paste, move, or commit real credentials.
-- Keep credentials in existing environment variables or secret managers.
+- Leave real credentials in existing environment variables or secret managers. Never print, paste, move, or commit them.
 - Use fixture-only values containing `FixtureToken` for tests and examples.
 - Bind proxy to `127.0.0.1` unless remote access is explicitly required.
 - Require `server.api_key` before binding beyond loopback.
 - Keep `block_private_targets: true` unless a trusted local upstream is required.
-- Keep telemetry absent and `debug_requests: false`.
-- Keep full redaction enabled. Add custom tail-only rules for unknown internal formats.
-- Do not add entropy-only matching. Detection must remain deterministic.
-- Do not try to redact upstream authentication headers. Provider must receive its
-  own key. PromptCloak protects request content before forwarding and masks
-  sensitive headers in debug output.
+- Leave `debug_requests: false` and do not add telemetry.
+- Use full redaction. Add custom tail-only rules for unknown internal formats.
+- Detection must remain deterministic; do not add entropy-only matching.
+- Provider authentication belongs outside request content. PromptCloak forwards
+  configured upstream credentials and masks sensitive headers in debug output.
 
 ## Proxy mode
 
-Install PromptCloak using current Homebrew, release-wheel, Docker, or source
-instructions in README. Create config without placing literal keys in it:
+Create config without placing literal keys in it:
 
 ```yaml
 server:
@@ -130,7 +127,7 @@ safe_params = redact_params(model=model, messages=messages, tools=tools)
 safe_payload = redact_payload(payload)
 ```
 
-Use helper matching call shape:
+Pick the helper that matches the call shape:
 
 - `redact_messages` for message arrays, including LangChain message objects.
 - `redact_params` for OpenAI, LiteLLM, and similar keyword arguments.
@@ -144,8 +141,7 @@ tool payloads, and background jobs.
 
 1. Run project lint, type checks, and focused tests.
 2. In proxy mode, confirm `GET /healthz` reports redaction enabled and telemetry disabled.
-3. Test redaction against an echo target, never a model. Temporarily add
-   `https://httpbin.org/anything` to `target.allowed_base_urls`, then run:
+3. Test redaction against an echo target, never a model:
 
 ```bash
 FAKE_KEY="AI""zaSyFixtureToken000000000000000000000"
@@ -164,6 +160,5 @@ Expected output:
 GEMINI_API_KEY=[REDACTED_SECRET]
 ```
 
-Remove temporary echo-target access after verification. Confirm fixture value is
-absent from logs. Report selected mode, changed files, credential handling,
-commands run, and exact verification result.
+Confirm fixture value is absent from logs. Report selected mode, changed files,
+credential handling, commands run, and exact verification result.

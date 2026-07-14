@@ -67,12 +67,11 @@
 
   const collectMatches = (source, language) => {
     const matches = [];
-    for (const [type, pattern] of patterns[language] || []) {
+    for (const [type, pattern] of patterns[language]) {
       pattern.lastIndex = 0;
       let match;
       while ((match = pattern.exec(source)) !== null) {
         const value = match[0];
-        if (!value) continue;
         const range = { start: match.index, end: match.index + value.length, type, value };
         if (!overlaps(range, matches)) matches.push(range);
       }
@@ -93,7 +92,7 @@
   };
 
   for (const block of document.querySelectorAll("pre code")) {
-    const source = block.textContent || "";
+    const source = block.textContent;
     const language = detectLanguage(source);
     block.dataset.language = language;
     if (language === "text") continue;
