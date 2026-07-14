@@ -58,6 +58,16 @@ button:focus-visible {
   outline-offset: 4px;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .site-header {
   position: sticky;
   top: 0;
@@ -198,6 +208,27 @@ h3 {
   padding: 0 18px;
   border-radius: 8px;
   font-weight: 800;
+}
+
+button.button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.button-icon {
+  width: 17px;
+  height: 17px;
+  margin-right: 8px;
+  filter: brightness(0) invert(1);
+}
+
+.copy-button {
+  min-width: 148px;
+}
+
+.copy-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .primary {
@@ -464,19 +495,39 @@ article pre {
 
 .token-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
   align-self: start;
 }
 
 .token-grid span {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
+  min-height: 56px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px 16px;
+  padding: 11px 14px;
   background: rgba(255, 255, 255, 0.035);
   color: var(--text);
   font-weight: 700;
+}
+
+.coverage-icon {
+  flex: 0 0 26px;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.coverage-icon.mono {
+  filter: brightness(0) invert(1);
+  opacity: 0.86;
+}
+
+.coverage-icon.generic {
+  opacity: 0.68;
 }
 
 ul {

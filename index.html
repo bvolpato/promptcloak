@@ -19,6 +19,7 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="./highlight.js" defer></script>
+    <script src="./prompt.js" defer></script>
   </head>
   <body>
     <header class="site-header">
@@ -50,7 +51,18 @@
           <div class="actions">
             <a class="button primary" href="#install">Start</a>
             <a class="button secondary" href="#smoke">Verify</a>
+            <button
+              id="copy-prompt"
+              class="button secondary copy-button"
+              type="button"
+              data-prompt-url="./PROMPT.md"
+              aria-describedby="copy-prompt-status"
+            >
+              <img class="button-icon" src="./icons/copy.svg" alt="" />
+              <span id="copy-prompt-label">Copy prompt</span>
+            </button>
             <a class="button secondary" href="https://github.com/bvolpato/promptcloak">GitHub</a>
+            <span id="copy-prompt-status" class="sr-only" aria-live="polite"></span>
           </div>
           <div class="hero-facts" aria-label="Project guarantees">
             <span>Local only</span>
@@ -438,27 +450,27 @@ safe_payload = redact_payload(payload)</code></pre>
           </p>
         </div>
         <div class="token-grid" aria-label="Covered secret families">
-          <span>GitHub PATs</span>
-          <span>Atlassian</span>
-          <span>OpenAI</span>
-          <span>Gemini</span>
-          <span>Anthropic</span>
-          <span>OpenRouter</span>
-          <span>Z.AI</span>
-          <span>MiniMax</span>
-          <span>DeepSeek</span>
-          <span>Codex</span>
-          <span>Grok/xAI</span>
-          <span>Fireworks</span>
-          <span>Cloudflare</span>
-          <span>AWS</span>
-          <span>Signed URLs</span>
-          <span>PGP keys</span>
-          <span>Slack</span>
-          <span>Stripe</span>
-          <span>JWTs</span>
-          <span>PEM keys</span>
-          <span>Custom rules</span>
+          <span><img class="coverage-icon mono" src="./icons/github.svg" alt="" loading="lazy" />GitHub PATs</span>
+          <span><img class="coverage-icon mono" src="./icons/atlassian.svg" alt="" loading="lazy" />Atlassian</span>
+          <span><img class="coverage-icon mono" src="./icons/openai.svg" alt="" loading="lazy" />OpenAI</span>
+          <span><img class="coverage-icon" src="./icons/gemini.svg" alt="" loading="lazy" />Gemini</span>
+          <span><img class="coverage-icon mono" src="./icons/anthropic.svg" alt="" loading="lazy" />Anthropic</span>
+          <span><img class="coverage-icon mono" src="./icons/openrouter.svg" alt="" loading="lazy" />OpenRouter</span>
+          <span><img class="coverage-icon mono" src="./icons/zai.svg" alt="" loading="lazy" />Z.AI</span>
+          <span><img class="coverage-icon mono" src="./icons/minimax.svg" alt="" loading="lazy" />MiniMax</span>
+          <span><img class="coverage-icon" src="./icons/deepseek.svg" alt="" loading="lazy" />DeepSeek</span>
+          <span><img class="coverage-icon mono" src="./icons/codex.svg" alt="" loading="lazy" />Codex</span>
+          <span><img class="coverage-icon mono" src="./icons/xai.svg" alt="" loading="lazy" />Grok/xAI</span>
+          <span><img class="coverage-icon" src="./icons/fireworks.svg" alt="" loading="lazy" />Fireworks</span>
+          <span><img class="coverage-icon mono" src="./icons/cloudflare.svg" alt="" loading="lazy" />Cloudflare</span>
+          <span><img class="coverage-icon mono" src="./icons/aws.svg" alt="" loading="lazy" />AWS</span>
+          <span><img class="coverage-icon mono generic" src="./icons/link-2.svg" alt="" loading="lazy" />Signed URLs</span>
+          <span><img class="coverage-icon mono generic" src="./icons/key-round.svg" alt="" loading="lazy" />PGP keys</span>
+          <span><img class="coverage-icon mono generic" src="./icons/hash.svg" alt="" loading="lazy" />Slack</span>
+          <span><img class="coverage-icon mono" src="./icons/stripe.svg" alt="" loading="lazy" />Stripe</span>
+          <span><img class="coverage-icon mono" src="./icons/jwt.svg" alt="" loading="lazy" />JWTs</span>
+          <span><img class="coverage-icon mono generic" src="./icons/file-key-2.svg" alt="" loading="lazy" />PEM keys</span>
+          <span><img class="coverage-icon mono generic" src="./icons/regex.svg" alt="" loading="lazy" />Custom rules</span>
         </div>
       </section>
 
