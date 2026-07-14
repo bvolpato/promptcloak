@@ -1,10 +1,10 @@
-# Security Audit
+# Security audit
 
 Date: 2026-07-12
 
 Scope: local proxy, redaction engine, library helpers, config loading, emergency tracing, audit logs, docs, CI, and public git history hygiene.
 
-## Findings Fixed
+## Findings fixed
 
 - Emergency tracing now masks every `X-Redact-*` header. These headers can contain exact-match rules, so logging them raw was unsafe.
 - Emergency tracing masks credential-shaped headers, including `Proxy-Authorization` and custom secret headers.
@@ -16,7 +16,7 @@ Scope: local proxy, redaction engine, library helpers, config loading, emergency
 - Dependabot delays patch updates for 3 days, minor updates for 7 days, and major updates for 30 days. Security updates remain immediate.
 - JSON, text, and streaming content-type checks are now case-insensitive.
 
-## E2E Coverage
+## End-to-end coverage
 
 - Nested Responses API payload redaction across messages, tools, metadata, comma-separated provider fixtures, and custom tail rules.
 - Audit log events contain counts and rule names without fixture secret values.
@@ -27,14 +27,14 @@ Scope: local proxy, redaction engine, library helpers, config loading, emergency
 - Emergency tracing masks redaction rule headers and keeps redacted body clean.
 - Provider fixtures cover Cloudflare, signed URLs, encrypted PEM/PGP keys, and newer AI providers including Z.AI, MiniMax, DeepSeek, Codex/OpenAI, xAI/Grok, and Fireworks.
 
-## Fixture Hygiene
+## Fixture hygiene
 
 Tests use provider-shaped fixture tokens built from split string prefixes. No real keys are used, and no contiguous key-shaped fixtures are committed.
 
-## Remaining Risks
+## Remaining risks
 
 - Streaming response redaction is not implemented.
 - Detection is deterministic and format-based, so unknown provider key formats may need new rules.
 - DNS private-target validation is not connection-pinned. Allow only trusted upstream hostnames.
 - Emergency tracing intentionally logs raw request bodies; use only with local fixture data.
-- This is an internal code audit, not an external penetration test.
+- This audit covers repository code and tests. No external penetration test was performed.

@@ -51,19 +51,19 @@ existing immutable tag:
 gh workflow run release.yml --ref main -f tag="v${VERSION}"
 ```
 
-## Secret Hygiene
+## Secret hygiene
 
 - Do not put real secrets, customer prompts, credentials, or private config in issues, tests, docs, commits, or screenshots.
 - Use split fixture strings like `"sk-" + "FixtureToken..."` when tests need provider-shaped values.
 - Prefer full masking in examples: `[REDACTED_SECRET]`.
 - Run secret audit before opening a pull request.
 
-## Redaction Rules
+## Redaction rules
 
 - Deterministic local rules beat model-based detection.
 - Avoid entropy-only detectors unless false positives are tightly bounded.
 - Tests for new provider patterns must prove full redaction and comma-separated redaction.
 
-## Emergency Request Tracing
+## Emergency request tracing
 
 `promptcloak serve --debug-requests` logs raw request bodies. Use only with local fixture values.

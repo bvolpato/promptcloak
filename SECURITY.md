@@ -1,4 +1,4 @@
-# Security Policy
+# Security policy
 
 PromptCloak is built to keep secrets local before LLM requests leave a machine.
 
@@ -13,8 +13,8 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - No telemetry, analytics, or phone-home behavior.
 - Redaction runs locally with deterministic `detect-secrets` plugins plus provider rules.
 - Request scanning stays in memory and does not write prompt bodies to temporary files.
-- Audit logs contain redaction counts and rule names, not secret values.
-- Upstream auth headers are never forwarded unless explicitly configured.
+- Audit logs contain redaction counts and rule names without storing secret values.
+- Client-supplied auth headers are dropped unless forwarding is explicitly configured.
 - Private/loopback target URLs are blocked by default to reduce SSRF risk.
 
 ## Limitations
@@ -27,7 +27,7 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - Detection quality depends on known provider formats, labeled values, connection-string shapes, and configured tail/regex rules.
 - Entropy-only matching is disabled to avoid unpredictable false positives.
 
-## Recommended Defaults
+## Recommended defaults
 
 - Bind to `127.0.0.1`.
 - Keep `target.forward_client_authorization: false`.

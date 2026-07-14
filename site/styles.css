@@ -322,32 +322,6 @@ pre code {
   color: #f17878;
 }
 
-.strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-block: 1px solid var(--line);
-  background: var(--panel);
-}
-
-.strip div {
-  padding: 28px clamp(20px, 5vw, 72px);
-  border-right: 1px solid var(--line);
-}
-
-.strip div:last-child {
-  border-right: 0;
-}
-
-.strip strong,
-.strip span {
-  display: block;
-}
-
-.strip strong {
-  margin-bottom: 8px;
-}
-
-.strip span,
 .section p,
 li {
   color: var(--muted);
@@ -434,10 +408,6 @@ li {
 
 .code-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-}
-
-.code-grid.single {
-  grid-template-columns: 1fr;
 }
 
 .agent-grid {
@@ -561,7 +531,6 @@ footer a {
 
   .hero,
   .section,
-  .strip,
   .proof,
   .quickstart,
   .agent-grid {
@@ -575,15 +544,6 @@ footer a {
 
   .quickstart pre {
     align-self: auto;
-  }
-
-  .strip div {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .strip div:last-child {
-    border-bottom: 0;
   }
 
   .proof div {

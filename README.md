@@ -7,11 +7,11 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-3776ab)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/GHCR-promptcloak-54d6a0)](https://github.com/bvolpato/promptcloak/pkgs/container/promptcloak)
 
-**Run LLM requests through a local secret scrubber before they leave your machine.**
+**Redact secrets before prompts reach an LLM provider.**
 
-PromptCloak is for developers using coding agents, SDKs, and OpenAI-compatible backends that should never receive local credentials embedded in prompts. It runs on your machine, scans request bodies before forwarding, and replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches.
+PromptCloak is a local proxy and Python library for coding agents, SDKs, and OpenAI-compatible backends. It scans request bodies and query parameters before forwarding, then replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches.
 
-No telemetry. No phone-home. No full-secret storage required.
+PromptCloak has no telemetry or phone-home behavior. Custom rules can store only secret tails.
 
 ![PromptCloak site preview](site/hero.png)
 
@@ -36,13 +36,13 @@ Coverage is deterministic: `bc-detect-secrets` plus PromptCloak provider rules a
 
 ## Security boundary
 
-- Request bodies are scanned before they leave your machine.
-- Audit logs store counts and rule names, never secret values.
+- Request bodies and query parameters are scanned before they leave your machine.
+- Audit logs record redaction counts and rule names without storing secret values.
 - Upstream auth headers still have to reach the provider when used for authentication.
 - Unknown private token formats need a custom exact-tail or regex rule.
 - `--debug-requests` can print raw local request bodies; use it only with fixture data.
 
-## 60-second demo
+## Quick start
 
 ```bash
 brew tap bvolpato/tap
@@ -58,7 +58,7 @@ Send traffic through PromptCloak:
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "openai/gpt-5.5",
+    "model": "gpt-5.5",
     "messages": [
       {
         "role": "user",
@@ -83,7 +83,7 @@ redaction:
 
 ## Deterministic redaction smoke
 
-Do not verify redaction by asking an LLM to repeat what it received. Models can refuse, infer, summarize, or misstate what happened. Use an echo target:
+Do not verify redaction by asking an LLM to repeat what it received. Models can refuse, infer, summarize, or misstate what happened. Send a fixture token to an echo target:
 
 ```bash
 FAKE_GEMINI_KEY="AI""zaSyFixtureToken000000000000000000000"
@@ -126,7 +126,7 @@ Service mode needs the upstream key in config or service-manager env:
 brew services start bvolpato/tap/promptcloak
 ```
 
-## Install release with uv
+## Install with uv
 
 ```bash
 uv tool install \
@@ -305,7 +305,7 @@ import httpx
 from promptcloak import redact_payload
 
 payload = {
-    "model": "openai/gpt-5.5",
+    "model": "gpt-5.5",
     "messages": [{"role": "user", "content": "secret=<api-key-like-value>"}],
 }
 
@@ -316,13 +316,7 @@ response = httpx.post(
 )
 ```
 
-## Run
-
-```bash
-uv run promptcloak init --target-base-url https://api.openai.com/v1
-export OPENAI_API_KEY="<openai-upstream-key>"
-uv run promptcloak serve
-```
+## Configuration
 
 Default config: `~/.config/promptcloak/config.yaml`
 
@@ -392,8 +386,8 @@ Configured target keys are bound to `target.default_base_url`. A request that ch
 `X-Target-Base-URL` must also provide its matching `X-Target-API-Key` or
 `X-Target-Authorization`.
 
-Dynamic target overrides require `target.allowed_base_urls` while private-target protection is
-enabled. Set `block_private_targets: false` only for trusted local targets.
+An empty `target.allowed_base_urls` permits any public target. Add URLs to restrict dynamic
+routing. Set `block_private_targets: false` only for trusted local targets.
 
 Per-request rules are exact matches by default. Regex rules remain available in trusted config.
 Set `redaction.allow_extra_regex_rules: true` only for authenticated clients you trust.
@@ -583,7 +577,7 @@ Upstream provider URL and key are `X-Target-Base-URL` and `X-Target-API-Key`, or
 
 ## Claude Code
 
-Claude Code uses Anthropic-compatible traffic, not OpenAI Chat Completions. PromptCloak can still redact and forward Claude Code requests when upstream is Anthropic-compatible or an LLM gateway that accepts Claude Code traffic.
+Claude Code sends Anthropic Messages requests. PromptCloak redacts and forwards them to Anthropic-compatible providers and gateways.
 
 Config:
 
@@ -608,7 +602,7 @@ claude
 
 PromptCloak forwards `/v1/messages` to configured upstream. It does not translate OpenAI protocol into Anthropic protocol.
 
-## Redaction Engine
+## Redaction engine
 
 PromptCloak uses `bc-detect-secrets` directly, plus deterministic rules for provider tokens and user-defined exact-tail or regex matches. No model runtime involved.
 
@@ -636,8 +630,8 @@ JSON is scanned structurally. Query parameters and unencoded non-JSON bodies, in
 multipart requests, are scanned without changing unrelated bytes. Encoded request bodies are
 rejected while redaction is enabled; decompress them before sending.
 
-Every scan is local. PromptCloak never calls an LLM to detect secrets. Entropy-only
-matching is intentionally disabled; use custom rules for opaque internal formats.
+Every scan runs locally without an LLM. Entropy-only matching is disabled; use
+custom rules for opaque internal formats.
 
 ## Encrypt rules at rest
 
@@ -759,7 +753,7 @@ PromptCloak protects request bodies before they leave your machine. It masks sen
 
 ## Emergency request tracing
 
-`promptcloak serve --debug-requests` logs raw request bodies before redaction. Use it only with local fixture data when an echo target is not enough. Auth, target-key, and redaction-rule headers are masked; body text is not.
+`promptcloak serve --debug-requests` logs raw request bodies before redaction. Restrict it to local fixture data and cases where an echo target is insufficient. Auth, target-key, and redaction-rule headers are masked; body text is visible.
 
 ## Development
 
@@ -777,9 +771,8 @@ headers, audit logs, emergency tracing, response scanning, target allowlists, te
 bodies, and provider-shaped fixture tokens. Fixtures are split in source so no real or
 contiguous fake keys are committed.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [SECURITY_AUDIT.md](SECURITY_AUDIT.md) before opening issues or pull requests. Never post real secrets in public project surfaces.
-
-## Distribution
-
-PromptCloak ships signed tags, checksums, build provenance, source, wheel, Helm chart,
-Homebrew formula, and GHCR images with SBOM attestations.
+Releases include signed tags, checksums, build provenance, source, wheel, Helm chart,
+Homebrew formula, and GHCR images with SBOM attestations. See
+[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[SECURITY_AUDIT.md](SECURITY_AUDIT.md) before opening issues or pull requests. Never
+post real secrets in public project surfaces.
