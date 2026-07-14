@@ -218,8 +218,19 @@ async def test_e2e_target_allowlist_rejects_prefix_lookalike() -> None:
 
 
 @pytest.mark.asyncio
-async def test_e2e_dynamic_target_requires_allowlist_by_default() -> None:
+@respx.mock
+async def test_e2e_public_dynamic_target_is_allowed_without_allowlist(monkeypatch) -> None:
     settings = Settings(target=TargetConfig(default_base_url="https://configured.example/v1"))
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))
+        ],
+    )
+    route = respx.post("https://dynamic.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
 
     async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
         response = await client.post(
@@ -228,8 +239,8 @@ async def test_e2e_dynamic_target_requires_allowlist_by_default() -> None:
             json={"input": "hello"},
         )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "dynamic target requires allowlist"
+    assert response.status_code == 200
+    assert route.called
 
 
 @pytest.mark.asyncio

@@ -6,11 +6,11 @@ import json
 import logging
 import posixpath
 import socket
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from typing import Any
-from urllib.parse import unquote, urlsplit, urlunsplit
+from urllib.parse import SplitResult, unquote, urlsplit, urlunsplit
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -107,42 +107,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 async def forward_request(request: Request, path: str) -> Response:
     settings: Settings = request.app.state.settings
     _check_proxy_auth(request, settings)
-    target_path = path
-    target_url = _target_url(request, target_path, settings)
-    await _validate_target(target_url, settings, dynamic=_uses_dynamic_target(request, settings))
+    target_url = _target_url(request, path, settings)
+    await _validate_target(target_url, settings)
 
     body = await _read_request_body(request, settings.server.max_request_body_bytes)
     redactor = _redactor_for_request(request, settings)
     audit: AuditLogger = request.app.state.audit
     query_params, query_stats = _redact_query_params(request, redactor)
     audit.redaction(f"query:{path}", query_stats)
-    content = body
+    content, body_stats, json_payload = _redact_request_body(request, body, redactor)
+    audit.redaction(path, body_stats)
     stats = query_stats
-    json_payload: Any | None = None
-    encoded_body = request.headers.get("content-encoding", "identity").lower() != "identity"
-
-    if body and encoded_body and settings.redaction.enabled:
-        raise HTTPException(status_code=415, detail="encoded request bodies are not supported")
-    if body and not encoded_body and _is_json_request(request):
-        try:
-            json_payload = json.loads(body)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="invalid JSON request body") from None
-        result = redactor.redact_payload(json_payload)
-        json_payload = result.value
-        stats.merge(result.stats)
-        audit.redaction(path, result.stats)
-        content = json.dumps(json_payload, separators=(",", ":")).encode("utf-8")
-    elif body and not encoded_body and _is_text_request(request):
-        result = redactor.redact_text(body.decode("utf-8", errors="replace"))
-        stats.merge(result.stats)
-        audit.redaction(path, result.stats)
-        content = result.value.encode("utf-8")
-    elif body and not encoded_body:
-        result = redactor.redact_text(body.decode("utf-8", errors="surrogateescape"))
-        stats.merge(result.stats)
-        audit.redaction(path, result.stats)
-        content = result.value.encode("utf-8", errors="surrogateescape")
+    stats.merge(body_stats)
 
     compat_responses_to_chat = _should_bridge_responses_to_chat(request, path, settings)
     if compat_responses_to_chat:
@@ -150,11 +126,8 @@ async def forward_request(request: Request, path: str) -> Response:
             raise HTTPException(
                 status_code=400, detail="responses-to-chat bridge requires JSON body"
             )
-        target_path = "/v1/chat/completions"
-        target_url = _target_url(request, target_path, settings)
-        await _validate_target(
-            target_url, settings, dynamic=_uses_dynamic_target(request, settings)
-        )
+        target_url = _target_url(request, "/v1/chat/completions", settings)
+        await _validate_target(target_url, settings)
         content = json.dumps(responses_to_chat_payload(json_payload), separators=(",", ":")).encode(
             "utf-8"
         )
@@ -221,15 +194,7 @@ async def forward_request(request: Request, path: str) -> Response:
         )
 
     if settings.redaction.scan_responses and upstream_payload is not None:
-        try:
-            result = redactor.redact_payload(upstream_payload)
-        except ValueError:
-            return Response(
-                content=upstream_content,
-                status_code=upstream.status_code,
-                headers=response_headers,
-                media_type=upstream.headers.get("content-type"),
-            )
+        result = redactor.redact_payload(upstream_payload)
         audit.redaction(f"response:{path}", result.stats)
         return JSONResponse(
             result.value, status_code=upstream.status_code, headers=response_headers
@@ -288,6 +253,39 @@ async def _read_request_body(request: Request, limit: int) -> bytes:
     return b"".join(chunks)
 
 
+def _redact_request_body(
+    request: Request, body: bytes, redactor: SecretRedactor
+) -> tuple[bytes, RedactionStats, Any | None]:
+    stats = RedactionStats()
+    if not body:
+        return body, stats, None
+
+    encoded = request.headers.get("content-encoding", "identity").lower() != "identity"
+    if encoded:
+        if redactor.config.enabled:
+            raise HTTPException(status_code=415, detail="encoded request bodies are not supported")
+        return body, stats, None
+
+    if _is_json_request(request):
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="invalid JSON request body") from None
+        result = redactor.redact_payload(payload)
+        return (
+            json.dumps(result.value, separators=(",", ":")).encode("utf-8"),
+            result.stats,
+            result.value,
+        )
+
+    if _is_text_request(request):
+        result = redactor.redact_text(body.decode("utf-8", errors="replace"))
+        return result.value.encode("utf-8"), result.stats, None
+
+    result = redactor.redact_text(body.decode("utf-8", errors="surrogateescape"))
+    return result.value.encode("utf-8", errors="surrogateescape"), result.stats, None
+
+
 def _redact_query_params(
     request: Request, redactor: SecretRedactor
 ) -> tuple[list[tuple[str, str]], RedactionStats]:
@@ -338,7 +336,7 @@ def _target_url(request: Request, path: str, settings: Settings) -> str:
     return urlunsplit((base_parts.scheme, base_parts.netloc, final_path, "", ""))
 
 
-async def _validate_target(target_url: str, settings: Settings, *, dynamic: bool) -> None:
+async def _validate_target(target_url: str, settings: Settings) -> None:
     parsed = urlsplit(target_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise HTTPException(status_code=400, detail="invalid target URL")
@@ -349,8 +347,6 @@ async def _validate_target(target_url: str, settings: Settings, *, dynamic: bool
     if parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="target URL userinfo not allowed")
     allowed = settings.target.allowed_base_urls
-    if dynamic and settings.target.block_private_targets and not allowed:
-        raise HTTPException(status_code=403, detail="dynamic target requires allowlist")
     if allowed and not any(_target_matches_allowed_url(target_url, url) for url in allowed):
         raise HTTPException(status_code=403, detail="target URL not allowed")
     if settings.target.block_private_targets:
@@ -382,7 +378,7 @@ def _target_matches_allowed_url(target_url: str, allowed_url: str) -> bool:
     )
 
 
-def _effective_port(parsed: Any) -> int | None:
+def _effective_port(parsed: SplitResult) -> int | None:
     if parsed.port:
         return parsed.port
     return {"http": 80, "https": 443}.get(parsed.scheme.lower())
@@ -399,12 +395,6 @@ def _is_private_host(host: str) -> bool:
         addresses = socket.getaddrinfo(host, None)
         ips = [ipaddress.ip_address(address[4][0]) for address in addresses]
     return not ips or any(not ip.is_global for ip in ips)
-
-
-def _uses_dynamic_target(request: Request, settings: Settings) -> bool:
-    return bool(request.headers.get("x-target-base-url")) and not _uses_configured_target(
-        request, settings
-    )
 
 
 def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
@@ -522,7 +512,7 @@ def _is_text_request(request: Request) -> bool:
     return content_type.startswith("text/")
 
 
-def _is_json_content(headers: httpx.Headers | Any) -> bool:
+def _is_json_content(headers: Mapping[str, str]) -> bool:
     media_type = headers.get("content-type", "").partition(";")[0].strip().lower()
     return media_type == "application/json" or media_type.endswith("+json")
 
