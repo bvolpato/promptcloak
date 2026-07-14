@@ -1,3 +1,4 @@
+import re
 import tomllib
 from pathlib import Path
 
@@ -34,6 +35,24 @@ def test_site_uses_local_syntax_highlighting() -> None:
 
     assert '<script src="./highlight.js" defer></script>' in site
     assert (ROOT / "site" / "highlight.js").is_file()
+
+
+def test_site_publishes_agent_integration_prompt() -> None:
+    site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    prompt = (ROOT / "PROMPT.md").read_text(encoding="utf-8")
+    published_prompt = (ROOT / "site" / "PROMPT.md").read_text(encoding="utf-8")
+
+    assert '<script src="./prompt.js" defer></script>' in site
+    assert 'data-prompt-url="./PROMPT.md"' in site
+    assert (ROOT / "site" / "prompt.js").is_file()
+    assert published_prompt == prompt
+
+
+def test_site_local_assets_exist() -> None:
+    site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+
+    for source in re.findall(r'src="\./([^"?]+)', site):
+        assert (ROOT / "site" / source).is_file(), source
 
 
 def test_site_dynamic_target_example_includes_allowlist() -> None:

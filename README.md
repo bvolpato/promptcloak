@@ -17,6 +17,7 @@ No telemetry. No phone-home. No full-secret storage required.
 
 Website: `https://bvolpato.github.io/promptcloak/`
 Repository: `https://github.com/bvolpato/promptcloak`
+Agent integration prompt: [`PROMPT.md`](PROMPT.md)
 
 ## What you get
 
