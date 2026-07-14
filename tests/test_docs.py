@@ -14,11 +14,14 @@ def test_release_docs_reference_current_artifacts() -> None:
     version = _version()
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     site = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    prompt = (ROOT / "PROMPT.md").read_text(encoding="utf-8")
     combined = readme + site
 
     assert f"releases/download/v{version}/promptcloak-{version}-py3-none-any.whl" in combined
     assert f"releases/download/v{version}/promptcloak-{version}.tgz" in combined
     assert f"ghcr.io/bvolpato/promptcloak:{version}" in combined
+    assert f"releases/download/v{version}/promptcloak-{version}-py3-none-any.whl" in prompt
+    assert f"ghcr.io/bvolpato/promptcloak:{version}" in prompt
     assert "0.1.3" not in combined
 
 
