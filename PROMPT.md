@@ -16,6 +16,50 @@ or clients that support a custom OpenAI or Anthropic base URL. Use library mode
 when Python code constructs requests and can redact values immediately before an
 SDK call.
 
+## Install
+
+Choose one proxy installation method.
+
+Homebrew:
+
+```bash
+brew tap bvolpato/tap
+brew install promptcloak
+promptcloak version
+```
+
+uv tool:
+
+```bash
+uv tool install \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7-py3-none-any.whl
+promptcloak version
+```
+
+Docker:
+
+```bash
+docker pull ghcr.io/bvolpato/promptcloak:0.1.7
+docker run --rm --entrypoint promptcloak \
+  ghcr.io/bvolpato/promptcloak:0.1.7 version
+```
+
+Source checkout:
+
+```bash
+git clone https://github.com/bvolpato/promptcloak.git
+cd promptcloak
+uv sync --extra dev --locked
+uv run promptcloak version
+```
+
+For Python library mode, add release wheel to existing uv project:
+
+```bash
+uv add \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7-py3-none-any.whl
+```
+
 ## Security rules
 
 - Never print, paste, move, or commit real credentials.
