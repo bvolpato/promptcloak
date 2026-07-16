@@ -5,7 +5,7 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --no-dev --no-editable --locked
 
-FROM python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
+FROM python:3.12-slim@sha256:c3d81d25b3154142b0b42eb1e61300024426268edeb5b5a26dd7ddf64d9daf28
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PROMPTCLOAK_HOST=0.0.0.0 \
