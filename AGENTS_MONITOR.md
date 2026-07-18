@@ -28,10 +28,10 @@ helm lint ./charts/promptcloak
 ```bash
 systemctl --user is-enabled promptcloak.service
 systemctl --user is-active promptcloak.service
-curl -fsS http://127.0.0.1:8000/healthz
-curl -fsS http://127.0.0.1:8000/openapi.json | jq -r .info.version
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8000/healthz
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8000/openapi.json | jq -r .info.version
 docker exec promptcloak-local promptcloak version
-curl -fsS http://127.0.0.1:8787/healthz
+curl --retry 10 --retry-connrefused --retry-delay 1 -fsS http://127.0.0.1:8787/healthz
 ```
 
 Both health endpoints must report redaction enabled, `detect-secrets`, and `telemetry:false`.
