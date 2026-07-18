@@ -17,7 +17,6 @@ redaction:
   enabled: true
   engine: detect-secrets
   redact_mode: full
-  scan_responses: false
   rules:
     - type: regex
       value: "sk-[A-Za-z0-9_-]{20,}"

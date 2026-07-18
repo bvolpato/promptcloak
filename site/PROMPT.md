@@ -96,7 +96,6 @@ redaction:
   enabled: true
   engine: detect-secrets
   redact_mode: full
-  scan_responses: false
 ```
 
 Use `api_key_header: x-api-key` for Anthropic-compatible upstreams. Keep one

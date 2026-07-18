@@ -23,7 +23,7 @@ Report vulnerabilities privately through GitHub Security Advisories for this rep
 - Encoded request bodies must be decompressed before redaction.
 - Private-target checks validate DNS before connection but do not pin that resolution. Allow only trusted upstream hostnames.
 - Emergency request tracing can print raw request bodies locally.
-- Streaming response redaction is intentionally not attempted.
+- Provider responses pass through without scanning or redaction.
 - Detection quality depends on known provider formats, labeled values, connection-string shapes, and configured tail/regex rules.
 - Entropy-only matching is disabled to avoid unpredictable false positives.
 

@@ -341,7 +341,6 @@ redaction:
   engine: detect-secrets
   redact_mode: full
   encrypted: false
-  scan_responses: false
   max_extra_rules: 20
   max_extra_rule_chars: 1024
   allow_extra_regex_rules: false
@@ -747,7 +746,7 @@ PromptCloak protects request bodies before they leave your machine. It masks sen
 - Store only secret tails in redaction rules.
 - Keep `block_private_targets: true`.
 - Set `allowed_base_urls` in shared/team installs.
-- Keep response scanning off unless you need it; streaming response redaction is intentionally not attempted yet.
+- Treat provider responses as untrusted. PromptCloak returns them without scanning or redaction.
 - Add custom rules for internal tokens or providers without stable public prefixes.
 - In library mode, call `redact_messages`, `redact_params`, or `redact_payload` before SDK calls.
 
@@ -767,7 +766,7 @@ uv run promptcloak scan 'OPENAI_API_KEY=<api-key-like-value>'
 ```
 
 Tests cover nested OpenAI, Responses, and Claude-style payloads, dynamic upstream
-headers, audit logs, emergency tracing, response scanning, target allowlists, text
+headers, audit logs, emergency tracing, transparent responses, target allowlists, text
 bodies, and provider-shaped fixture tokens. Fixtures are split in source so no real or
 contiguous fake keys are committed.
 
