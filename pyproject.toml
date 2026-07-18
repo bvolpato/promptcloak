@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.31.0"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -18,9 +18,12 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Security",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
+
 dependencies = [
   "bc-detect-secrets==1.5.47",
   "cryptography>=49.0.0",
@@ -32,12 +35,23 @@ dependencies = [
   "uvicorn[standard]>=0.51.0",
 ]
 
+[project.urls]
+Homepage = "https://bvolpato.github.io/promptcloak/"
+Repository = "https://github.com/bvolpato/promptcloak"
+Issues = "https://github.com/bvolpato/promptcloak/issues"
+
 [project.optional-dependencies]
 dev = [
+  "pyright>=1.1.411",
   "pytest>=9.1.1",
   "pytest-asyncio>=1.4.0",
   "respx>=0.23.1",
   "ruff>=0.15.21",
+]
+
+[dependency-groups]
+audit = [
+  "pip-audit==2.10.1",
 ]
 
 [project.scripts]

@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13"]
+        python-version: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -36,12 +36,13 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
-      - run: uv sync --extra dev --locked
+      - run: uv sync --extra dev --group audit --locked
       - run: uv run scripts/check_release.py
       - run: uv run scripts/audit_secrets.py
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run --with pip-audit pip-audit
+      - run: uv run pyright src tests
+      - run: uv run pip-audit
       - run: uv build
       - run: helm lint ./charts/promptcloak
       - run: helm template promptcloak ./charts/promptcloak >/dev/null
