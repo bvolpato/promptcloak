@@ -12,8 +12,8 @@ Verify each published surface after deployment.
 ## Container and Helm
 
 ```bash
-docker pull ghcr.io/bvolpato/promptcloak:0.1.7
-docker run --rm --entrypoint promptcloak ghcr.io/bvolpato/promptcloak:0.1.7 version
+docker pull ghcr.io/bvolpato/promptcloak:0.1.8
+docker run --rm --entrypoint promptcloak ghcr.io/bvolpato/promptcloak:0.1.8 version
 helm lint ./charts/promptcloak
 ```
 

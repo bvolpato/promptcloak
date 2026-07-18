@@ -370,14 +370,14 @@ export DISABLE_TELEMETRY=1</code></pre>
   -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.7
+  ghcr.io/bvolpato/promptcloak:0.1.8
 
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
             <h3>Helm</h3>
             <pre><code>helm install promptcloak \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7.tgz \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 
@@ -396,7 +396,7 @@ promptcloak version</code></pre>
           <article>
             <h3>Library</h3>
             <pre><code>uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
 
 from promptcloak import redact_payload
 safe_payload = redact_payload(payload)</code></pre>

@@ -11,7 +11,7 @@ PromptCloak ships through signed Git tag, GitHub Actions, Homebrew tap, GitHub P
 5. Create and push signed tag:
 
 ```bash
-VERSION=0.1.7
+VERSION=0.1.8
 git tag -s "v${VERSION}" -m "PromptCloak ${VERSION}"
 git push origin "v${VERSION}"
 ```

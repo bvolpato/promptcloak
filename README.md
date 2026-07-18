@@ -130,7 +130,7 @@ brew services start bvolpato/tap/promptcloak
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
 promptcloak doctor
 ```
 
@@ -152,7 +152,7 @@ PromptCloak can run without proxy service. Import redaction helpers and filter r
 
 ```bash
 uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
 ```
 
 ```python
@@ -657,7 +657,7 @@ docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
   -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
   -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.7
+  ghcr.io/bvolpato/promptcloak:0.1.8
 
 curl -fsS http://127.0.0.1:8000/healthz
 docker stop promptcloak
@@ -724,8 +724,8 @@ helm install promptcloak ./charts/promptcloak \
 Release asset:
 
 ```bash
-helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.7/promptcloak-0.1.7.tgz
-helm install promptcloak ./promptcloak-0.1.7.tgz \
+helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8.tgz
+helm install promptcloak ./promptcloak-0.1.8.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
   --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
 ```
