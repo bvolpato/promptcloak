@@ -286,6 +286,65 @@ def test_tail_rule_redacts_full_token() -> None:
     assert result.stats.rule_hits["tail"] == 1
 
 
+def test_tail_rule_supports_non_word_base64_endings() -> None:
+    redactor = SecretRedactor(
+        RedactionConfig(
+            engine="basic",
+            rules=[RuleConfig(type="exact", value="abcd123=", name="base64-tail")],
+        )
+    )
+
+    result = redactor.redact_text("secret=FixtureToken000000abcd123=")
+
+    assert result.value == "secret=[REDACTED_SECRET]"
+    assert result.stats.rule_hits["base64-tail"] == 1
+
+
+def test_custom_rule_names_cannot_select_builtin_replacement_logic() -> None:
+    redactor = SecretRedactor(
+        RedactionConfig(
+            engine="basic",
+            rules=[RuleConfig(type="regex", value="fixture-[0-9]+", name="assigned_secret")],
+        )
+    )
+
+    result = redactor.redact_text("fixture-123456")
+
+    assert result.value == "[REDACTED_SECRET]"
+    assert result.stats.rule_hits["assigned_secret"] == 1
+
+
+def test_payload_redacts_secret_shaped_mapping_keys() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    secret_key = "sk-" + "FixtureToken" + ("0" * 24)
+
+    result = redactor.redact_payload({secret_key: "value"})
+
+    assert result.value == {"[REDACTED_SECRET]": "value"}
+    assert result.stats.rule_hits["openai_key"] == 1
+
+
+def test_explicit_secret_fields_redact_short_and_numeric_values() -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+    secret_key = "sk-" + "FixtureToken" + ("0" * 24)
+
+    result = redactor.redact_payload(
+        {
+            "password": "short",
+            "databasePassword": 123456,
+            "credentials": {secret_key: "value"},
+            "max_tokens": 1024,
+        }
+    )
+
+    assert result.value == {
+        "password": "[REDACTED_SECRET]",
+        "databasePassword": "[REDACTED_SECRET]",
+        "credentials": {"[REDACTED_SECRET]": "[REDACTED_SECRET]"},
+        "max_tokens": 1024,
+    }
+
+
 def test_generic_assignment_preserves_key_name() -> None:
     redactor = SecretRedactor(RedactionConfig(engine="basic", redact_mode="full"))
 

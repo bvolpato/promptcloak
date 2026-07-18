@@ -5,6 +5,7 @@ import ipaddress
 import json
 import logging
 import posixpath
+import secrets
 import socket
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
@@ -36,6 +37,9 @@ DROP_REQUEST_HEADERS = {
     "keep-alive",
     "proxy-authenticate",
     "proxy-authorization",
+    "te",
+    "trailer",
+    "transfer-encoding",
     "upgrade",
 }
 DROP_RESPONSE_HEADERS = {
@@ -45,6 +49,8 @@ DROP_RESPONSE_HEADERS = {
     "keep-alive",
     "proxy-authenticate",
     "proxy-authorization",
+    "te",
+    "trailer",
     "upgrade",
 }
 DROP_TRANSFORMED_RESPONSE_HEADERS = {
@@ -115,12 +121,14 @@ async def forward_request(request: Request, path: str) -> Response:
     audit: AuditLogger = request.app.state.audit
     query_params, query_stats = _redact_query_params(request, redactor)
     audit.redaction(f"query:{path}", query_stats)
-    content, body_stats, json_payload = _redact_request_body(request, body, redactor)
+    compat_responses_to_chat = _should_bridge_responses_to_chat(request, path, settings)
+    content, body_stats, json_payload = _redact_request_body(
+        request, body, redactor, parse_json=compat_responses_to_chat
+    )
     audit.redaction(path, body_stats)
     stats = query_stats
     stats.merge(body_stats)
 
-    compat_responses_to_chat = _should_bridge_responses_to_chat(request, path, settings)
     if compat_responses_to_chat:
         if not isinstance(json_payload, dict):
             raise HTTPException(
@@ -143,7 +151,7 @@ async def forward_request(request: Request, path: str) -> Response:
             target_url,
             content=content,
             headers=headers,
-            params=query_params,
+            params=httpx.QueryParams(tuple(query_params)),
         )
         upstream = await client.send(upstream_request, stream=True)
     except httpx.RequestError as exc:
@@ -165,7 +173,7 @@ async def forward_request(request: Request, path: str) -> Response:
             media_type=response_headers.get("content-type"),
         )
 
-    transform_response = compat_responses_to_chat or settings.redaction.scan_responses
+    transform_response = compat_responses_to_chat
     response_headers = _response_headers(upstream.headers, transformed=transform_response)
     upstream_content = (
         await upstream.aread() if transform_response else await _read_raw_upstream(upstream)
@@ -175,7 +183,7 @@ async def forward_request(request: Request, path: str) -> Response:
         await client.aclose()
 
     upstream_payload: Any | None = None
-    if _is_json_content(upstream.headers):
+    if compat_responses_to_chat and _is_json_content(upstream.headers):
         try:
             upstream_payload = json.loads(upstream_content)
         except ValueError:
@@ -183,21 +191,10 @@ async def forward_request(request: Request, path: str) -> Response:
 
     if compat_responses_to_chat and isinstance(upstream_payload, dict):
         response_payload = chat_response_to_responses(upstream_payload)
-        if settings.redaction.scan_responses:
-            result = redactor.redact_payload(response_payload)
-            audit.redaction(f"response:{path}", result.stats)
-            response_payload = result.value
         return JSONResponse(
             response_payload,
             status_code=upstream.status_code,
             headers=response_headers,
-        )
-
-    if settings.redaction.scan_responses and upstream_payload is not None:
-        result = redactor.redact_payload(upstream_payload)
-        audit.redaction(f"response:{path}", result.stats)
-        return JSONResponse(
-            result.value, status_code=upstream.status_code, headers=response_headers
         )
 
     return Response(
@@ -254,16 +251,28 @@ async def _read_request_body(request: Request, limit: int) -> bytes:
 
 
 def _redact_request_body(
-    request: Request, body: bytes, redactor: SecretRedactor
+    request: Request,
+    body: bytes,
+    redactor: SecretRedactor,
+    *,
+    parse_json: bool = False,
 ) -> tuple[bytes, RedactionStats, Any | None]:
     stats = RedactionStats()
     if not body:
         return body, stats, None
 
-    encoded = request.headers.get("content-encoding", "identity").lower() != "identity"
+    encoded = request.headers.get("content-encoding", "identity").strip().lower() != "identity"
     if encoded:
         if redactor.config.enabled:
             raise HTTPException(status_code=415, detail="encoded request bodies are not supported")
+        return body, stats, None
+
+    if not redactor.config.enabled:
+        if parse_json and _is_json_request(request):
+            try:
+                return body, stats, json.loads(body)
+            except json.JSONDecodeError:
+                raise HTTPException(status_code=400, detail="invalid JSON request body") from None
         return body, stats, None
 
     if _is_json_request(request):
@@ -278,10 +287,6 @@ def _redact_request_body(
             result.value,
         )
 
-    if _is_text_request(request):
-        result = redactor.redact_text(body.decode("utf-8", errors="replace"))
-        return result.value.encode("utf-8"), result.stats, None
-
     result = redactor.redact_text(body.decode("utf-8", errors="surrogateescape"))
     return result.value.encode("utf-8", errors="surrogateescape"), result.stats, None
 
@@ -294,7 +299,7 @@ def _redact_query_params(
     for key, value in request.query_params.multi_items():
         result = redactor.redact_payload({key: value})
         stats.merge(result.stats)
-        redacted.append((key, result.value[key]))
+        redacted.append(next(iter(result.value.items())))
     return redacted, stats
 
 
@@ -311,7 +316,7 @@ def _check_proxy_auth(request: Request, settings: Settings) -> None:
     if not api_key:
         return
     auth = request.headers.get("authorization", "")
-    if auth != f"Bearer {api_key}":
+    if not secrets.compare_digest(auth, f"Bearer {api_key}"):
         raise HTTPException(status_code=401, detail="invalid PromptCloak API key")
 
 
@@ -327,23 +332,35 @@ def _target_url(request: Request, path: str, settings: Settings) -> str:
     base_url = request.headers.get("x-target-base-url") or settings.target.default_base_url
     base = base_url.rstrip("/")
     incoming = path if path.startswith("/") else f"/{path}"
-    base_parts = urlsplit(base)
+    try:
+        base_parts = urlsplit(base)
+        _ = base_parts.hostname
+        _ = base_parts.port
+    except (UnicodeError, ValueError):
+        raise HTTPException(status_code=400, detail="invalid target URL") from None
     base_path = base_parts.path.rstrip("/")
-    if base_path and incoming.startswith(base_path + "/"):
+    if base_path and (incoming == base_path or incoming.startswith(base_path + "/")):
         final_path = incoming
+    elif base_path:
+        base_tail = "/" + base_path.rsplit("/", 1)[-1]
+        if incoming == base_tail or incoming.startswith(base_tail + "/"):
+            final_path = base_path + incoming[len(base_tail) :]
+        else:
+            final_path = f"{base_path}{incoming}"
     else:
-        final_path = f"{base_path}{incoming}"
+        final_path = incoming
     return urlunsplit((base_parts.scheme, base_parts.netloc, final_path, "", ""))
 
 
 async def _validate_target(target_url: str, settings: Settings) -> None:
-    parsed = urlsplit(target_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise HTTPException(status_code=400, detail="invalid target URL")
     try:
+        parsed = urlsplit(target_url)
+        hostname = parsed.hostname
         _ = parsed.port
-    except ValueError:
+    except (UnicodeError, ValueError):
         raise HTTPException(status_code=400, detail="invalid target URL") from None
+    if parsed.scheme not in {"http", "https"} or not hostname:
+        raise HTTPException(status_code=400, detail="invalid target URL")
     if parsed.username or parsed.password:
         raise HTTPException(status_code=400, detail="target URL userinfo not allowed")
     allowed = settings.target.allowed_base_urls
@@ -351,8 +368,8 @@ async def _validate_target(target_url: str, settings: Settings) -> None:
         raise HTTPException(status_code=403, detail="target URL not allowed")
     if settings.target.block_private_targets:
         try:
-            private = await asyncio.to_thread(_is_private_host, parsed.hostname)
-        except socket.gaierror:
+            private = await asyncio.to_thread(_is_private_host, hostname)
+        except (OSError, UnicodeError):
             raise HTTPException(
                 status_code=400, detail="target host could not be resolved"
             ) from None
@@ -409,9 +426,10 @@ def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
     if target_api_key_header not in {"authorization", "x-api-key"}:
         raise HTTPException(status_code=400, detail="invalid X-Target-API-Key-Header header")
     headers: dict[str, str] = {}
+    dropped = DROP_REQUEST_HEADERS | _connection_header_names(request.headers)
     for key, value in request.headers.items():
         lowered = key.lower()
-        if lowered in DROP_REQUEST_HEADERS:
+        if lowered in dropped:
             continue
         if lowered in {
             "x-target-base-url",
@@ -507,11 +525,6 @@ def _is_json_request(request: Request) -> bool:
     return _is_json_content(request.headers)
 
 
-def _is_text_request(request: Request) -> bool:
-    content_type = request.headers.get("content-type", "").lower()
-    return content_type.startswith("text/")
-
-
 def _is_json_content(headers: Mapping[str, str]) -> bool:
     media_type = headers.get("content-type", "").partition(";")[0].strip().lower()
     return media_type == "application/json" or media_type.endswith("+json")
@@ -543,5 +556,15 @@ async def _read_raw_upstream(upstream: httpx.Response) -> bytes:
 
 
 def _response_headers(headers: httpx.Headers, *, transformed: bool) -> dict[str, str]:
-    dropped = DROP_RESPONSE_HEADERS | (DROP_TRANSFORMED_RESPONSE_HEADERS if transformed else set())
+    dropped = (
+        DROP_RESPONSE_HEADERS
+        | _connection_header_names(headers)
+        | (DROP_TRANSFORMED_RESPONSE_HEADERS if transformed else set())
+    )
     return {key: value for key, value in headers.items() if key.lower() not in dropped}
+
+
+def _connection_header_names(headers: Mapping[str, str]) -> set[str]:
+    return {
+        name.strip().lower() for name in headers.get("connection", "").split(",") if name.strip()
+    }

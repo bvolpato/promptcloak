@@ -14,6 +14,14 @@ SENSITIVE_FIELD_RE = re.compile(
     r"signature|sig)(?:$|[_.-])"
 )
 
+STRICT_SENSITIVE_FIELD_RE = re.compile(
+    r"(?i)(?:^|[_.-])(?:api[_-]?keys?|client[_-]?secrets?|secrets?|passwords?|passwd|pwd|"
+    r"access[_-]?tokens?|refresh[_-]?tokens?|id[_-]?tokens?|auth[_-]?tokens?|"
+    r"session[_-]?tokens?|private[_-]?keys?|secret[_-]?(?:access[_-]?)?keys?|"
+    r"access[_-]?keys?|account[_-]?keys?|signing[_-]?keys?|encryption[_-]?keys?|"
+    r"credentials?|authorization)$"
+)
+
 BUILTIN_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("anthropic_key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b")),
     ("openrouter_key", re.compile(r"\bsk-or-v1-[A-Za-z0-9_-]{20,}\b")),

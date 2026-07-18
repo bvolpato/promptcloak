@@ -8,7 +8,7 @@ from typing import Any, Literal
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from promptcloak.security import decrypt_text, load_key
 
@@ -18,11 +18,11 @@ DEFAULT_KEY_PATH = CONFIG_DIR / "key"
 
 
 class ServerConfig(BaseModel):
-    host: str = "127.0.0.1"
-    port: int = 8000
+    host: str = Field(default="127.0.0.1", min_length=1)
+    port: int = Field(default=8000, ge=1, le=65535)
     api_key: str | None = None
     debug_requests: bool = False
-    debug_max_body_chars: int = 20000
+    debug_max_body_chars: int = Field(default=20000, ge=0)
     max_request_body_bytes: int = Field(default=32 * 1024 * 1024, ge=1024)
 
 
@@ -31,7 +31,7 @@ class TargetConfig(BaseModel):
     api_key: str | None = None
     api_key_header: Literal["authorization", "x-api-key"] = "authorization"
     forward_client_authorization: bool = False
-    timeout_seconds: float = 180.0
+    timeout_seconds: float = Field(default=180.0, gt=0)
     allowed_base_urls: list[str] = Field(default_factory=list)
     block_private_targets: bool = True
 
@@ -58,6 +58,13 @@ class RuleConfig(BaseModel):
             raise ValueError("redaction rule cannot be empty")
         if info.data.get("type") == "exact" and len(value) < 8:
             raise ValueError("exact redaction rules require at least 8 characters")
+        if info.data.get("type") == "regex":
+            try:
+                pattern = re.compile(value)
+            except re.error as exc:
+                raise ValueError(f"invalid redaction regex: {exc}") from exc
+            if pattern.search("") is not None:
+                raise ValueError("redaction regex cannot match empty text")
         return value
 
     @field_validator("name")
@@ -90,11 +97,19 @@ class RedactionConfig(BaseModel):
     rules: list[RuleConfig] = Field(default_factory=list)
     encrypted: bool = False
     encrypted_rules: str | None = None
-    scan_responses: bool = False
     max_extra_rules: int = Field(default=20, ge=0, le=100)
     max_extra_rule_chars: int = Field(default=1024, ge=8, le=8192)
     max_extra_rules_header_bytes: int = Field(default=16384, ge=256, le=65536)
     allow_extra_regex_rules: bool = False
+
+    @model_validator(mode="after")
+    def validate_encrypted_rules(self) -> RedactionConfig:
+        if self.encrypted:
+            if not self.encrypted_rules:
+                raise ValueError("encrypted redaction requires encrypted_rules")
+        elif self.encrypted_rules:
+            raise ValueError("encrypted_rules requires encrypted: true")
+        return self
 
 
 class AuditConfig(BaseModel):
@@ -143,7 +158,6 @@ def _env_overrides() -> dict[str, Any]:
         "PROMPTCLOAK_REDACTION_ENABLED": ("redaction", "enabled"),
         "PROMPTCLOAK_REDACTION_ENGINE": ("redaction", "engine"),
         "PROMPTCLOAK_REDACTION_MODE": ("redaction", "redact_mode"),
-        "PROMPTCLOAK_SCAN_RESPONSES": ("redaction", "scan_responses"),
         "PROMPTCLOAK_MAX_EXTRA_RULES": ("redaction", "max_extra_rules"),
         "PROMPTCLOAK_MAX_EXTRA_RULE_CHARS": ("redaction", "max_extra_rule_chars"),
         "PROMPTCLOAK_MAX_EXTRA_RULES_HEADER_BYTES": (
@@ -178,7 +192,11 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return loaded or {}
+    if loaded is None:
+        return {}
+    if not isinstance(loaded, dict):
+        raise ValueError("PromptCloak config root must be a mapping")
+    return loaded
 
 
 def _decrypt_rules_if_needed(settings: Settings, key_path: Path) -> Settings:
@@ -230,23 +248,11 @@ def config_template(target_base_url: str, target_api_key_env: str) -> str:
                 "engine": "detect-secrets",
                 "redact_mode": "full",
                 "encrypted": False,
-                "scan_responses": False,
                 "max_extra_rules": 20,
                 "max_extra_rule_chars": 1024,
                 "max_extra_rules_header_bytes": 16384,
                 "allow_extra_regex_rules": False,
-                "rules": [
-                    {
-                        "type": "exact",
-                        "value": "abcd1234",
-                        "name": "example-tail-only",
-                    },
-                    {
-                        "type": "regex",
-                        "value": "sk-[A-Za-z0-9_-]{20,}",
-                        "name": "openai-style-token",
-                    },
-                ],
+                "rules": [],
             },
             "audit": {"enabled": True, "file": None},
             "compat": {"responses_to_chat": False},

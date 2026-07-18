@@ -1,7 +1,13 @@
 import pytest
 from pydantic import ValidationError
 
-from promptcloak.config import RuleConfig, TargetConfig, load_settings
+from promptcloak.config import (
+    RedactionConfig,
+    RuleConfig,
+    ServerConfig,
+    TargetConfig,
+    load_settings,
+)
 
 
 def test_server_api_key_env(monkeypatch, tmp_path) -> None:
@@ -48,3 +54,28 @@ def test_exact_rules_require_safe_tail_length() -> None:
 def test_rule_names_are_bounded_log_labels() -> None:
     with pytest.raises(ValidationError):
         RuleConfig(type="regex", value="fixture", name="not a safe label")
+
+
+@pytest.mark.parametrize("value", ["[", ".*"])
+def test_regex_rules_reject_invalid_or_empty_matches(value: str) -> None:
+    with pytest.raises(ValidationError):
+        RuleConfig(type="regex", value=value)
+
+
+def test_encrypted_rules_fail_closed_when_ciphertext_is_missing() -> None:
+    with pytest.raises(ValidationError):
+        RedactionConfig(encrypted=True)
+
+
+def test_config_root_must_be_a_mapping(tmp_path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="config root must be a mapping"):
+        load_settings(config)
+
+
+@pytest.mark.parametrize("port", [0, 65536])
+def test_server_port_must_be_valid(port: int) -> None:
+    with pytest.raises(ValidationError):
+        ServerConfig(port=port)

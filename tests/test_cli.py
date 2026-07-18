@@ -32,6 +32,7 @@ def test_init_defaults_to_openai(tmp_path) -> None:
     data = config.read_text(encoding="utf-8")
     assert "default_base_url: https://api.openai.com/v1" in data
     assert "api_key: ${OPENAI_API_KEY}" in data
+    assert yaml.safe_load(data)["redaction"]["rules"] == []
     assert stat.S_IMODE(config.stat().st_mode) == 0o600
 
 

@@ -278,7 +278,10 @@ def _content_to_chat(content: Any) -> Any:
             continue
         image_url = item.get("image_url") or item.get("url")
         if image_url:
-            parts.append({"type": "image_url", "image_url": image_url})
+            image = image_url if isinstance(image_url, dict) else {"url": image_url}
+            if item.get("detail") and "detail" not in image:
+                image = image | {"detail": item["detail"]}
+            parts.append({"type": "image_url", "image_url": image})
     if len(parts) == len(texts):
         return "\n".join(texts)
     return parts or "\n".join(texts)

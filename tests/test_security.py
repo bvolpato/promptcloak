@@ -43,3 +43,4 @@ def test_encrypted_rules_load(tmp_path) -> None:
     settings = load_settings(config, key_file)
 
     assert settings.redaction.rules[0].value == "abcd1234"
+    Settings.model_validate(settings.model_dump())

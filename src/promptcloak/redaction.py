@@ -7,8 +7,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from detect_secrets.custom_types import NamedIO
+
 from promptcloak.config import RedactionConfig, RuleConfig
-from promptcloak.patterns import BUILTIN_PATTERNS, SENSITIVE_FIELD_RE
+from promptcloak.patterns import BUILTIN_PATTERNS, SENSITIVE_FIELD_RE, STRICT_SENSITIVE_FIELD_RE
 
 MASK = "[REDACTED_SECRET]"
 
@@ -64,7 +66,15 @@ class SecretRedactor:
                 continue
             if len(rule.value) <= 16:
                 tail = re.escape(rule.value)
-                patterns.append((name, re.compile(rf"\b[A-Za-z0-9_./+=-]{{8,}}{tail}\b")))
+                patterns.append(
+                    (
+                        name,
+                        re.compile(
+                            rf"(?<![A-Za-z0-9_./+-])[A-Za-z0-9_./+-]{{8,}}{tail}"
+                            rf"(?![A-Za-z0-9_./+=-])"
+                        ),
+                    )
+                )
             else:
                 patterns.append((name, re.compile(re.escape(rule.value))))
         return patterns
@@ -77,35 +87,53 @@ class SecretRedactor:
         if isinstance(value, tuple):
             return tuple(self._walk(item, stats) for item in value)
         if isinstance(value, Mapping):
-            return {
-                key: (
-                    self._redact_sensitive_field(item, stats)
+            redacted: dict[Any, Any] = {}
+            for key, item in value.items():
+                redacted_key = self._redact_string(key, stats) if isinstance(key, str) else key
+                redacted[redacted_key] = (
+                    self._redact_sensitive_field(item, stats, strict=self._is_strict_field(key))
                     if self._is_sensitive_field(key)
                     else self._walk(item, stats)
                 )
-                for key, item in value.items()
-            }
+            return redacted
         return value
 
     def _is_sensitive_field(self, key: Any) -> bool:
         if not isinstance(key, str):
             return False
-        normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
-        normalized = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", normalized)
-        return SENSITIVE_FIELD_RE.search(normalized) is not None
+        return SENSITIVE_FIELD_RE.search(self._normalized_field(key)) is not None
 
-    def _redact_sensitive_field(self, value: Any, stats: RedactionStats) -> Any:
+    def _is_strict_field(self, key: Any) -> bool:
+        return (
+            isinstance(key, str)
+            and STRICT_SENSITIVE_FIELD_RE.search(self._normalized_field(key)) is not None
+        )
+
+    def _normalized_field(self, key: str) -> str:
+        normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", key)
+        return re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", normalized)
+
+    def _redact_sensitive_field(
+        self, value: Any, stats: RedactionStats, *, strict: bool = False
+    ) -> Any:
         if isinstance(value, str):
-            if len(value.strip()) < 8:
+            if not value.strip() or (not strict and len(value.strip()) < 8):
                 return value
             stats.add("sensitive_field", 1)
             return self.placeholder
         if isinstance(value, list):
-            return [self._redact_sensitive_field(item, stats) for item in value]
+            return [self._redact_sensitive_field(item, stats, strict=strict) for item in value]
         if isinstance(value, tuple):
-            return tuple(self._redact_sensitive_field(item, stats) for item in value)
+            return tuple(self._redact_sensitive_field(item, stats, strict=strict) for item in value)
         if isinstance(value, Mapping):
-            return {key: self._redact_sensitive_field(item, stats) for key, item in value.items()}
+            redacted: dict[Any, Any] = {}
+            for key, item in value.items():
+                redacted_key = self._redact_string(key, stats) if isinstance(key, str) else key
+                redacted[redacted_key] = self._redact_sensitive_field(item, stats, strict=strict)
+            return redacted
+        if strict and value is not None and not isinstance(value, bool):
+            stats.add("sensitive_field", 1)
+            return self.placeholder
         return value
 
     def _redact_string(self, value: str, stats: RedactionStats) -> str:
@@ -113,10 +141,10 @@ class SecretRedactor:
         if self.config.engine == "detect-secrets":
             value = self._run_detect_secrets(value, stats)
         for name, pattern in self._custom_patterns:
-            value, count = self._sub_pattern(name, pattern, value)
+            value, count = pattern.subn(self._replacement, value)
             stats.add(name, count)
         for name, pattern in BUILTIN_PATTERNS:
-            value, count = self._sub_pattern(name, pattern, value)
+            value, count = self._sub_builtin_pattern(name, pattern, value)
             stats.add(name, count)
         if value != original and self.config.redact_mode == "partial":
             return value
@@ -168,7 +196,9 @@ class SecretRedactor:
             return value, total
         return re.subn(re.escape(secret_value), self._replacement, value)
 
-    def _sub_pattern(self, name: str, pattern: re.Pattern[str], value: str) -> tuple[str, int]:
+    def _sub_builtin_pattern(
+        self, name: str, pattern: re.Pattern[str], value: str
+    ) -> tuple[str, int]:
         if name == "assigned_secret":
             return pattern.subn(
                 lambda match: (
@@ -195,5 +225,5 @@ class SecretRedactor:
         return f"{secret[:4]}...{secret[-4:]}:{digest}"
 
 
-class _PromptText(io.StringIO):
+class _PromptText(io.StringIO, NamedIO):
     name = "promptcloak-input"

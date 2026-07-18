@@ -74,6 +74,31 @@ async def test_proxy_redacts_query_parameters_and_preserves_duplicates() -> None
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_proxy_redacts_secret_shaped_query_parameter_names() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        )
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            params=[(OPENAI_FAKE, "value")],
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    assert OPENAI_FAKE not in str(route.calls.last.request.url)
+    assert route.calls.last.request.url.params["[REDACTED_SECRET]"] == "value"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_proxy_redacts_multipart_body_without_corrupting_binary_bytes() -> None:
     settings = Settings(
         target=TargetConfig(
@@ -103,6 +128,31 @@ async def test_proxy_redacts_multipart_body_without_corrupting_binary_bytes() ->
     assert OPENAI_FAKE.encode() not in forwarded
     assert b"[REDACTED_SECRET]" in forwarded
     assert binary_marker in forwarded
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_redacts_text_without_corrupting_non_utf8_bytes() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        )
+    )
+    route = respx.post("https://upstream.example/v1/raw").mock(
+        return_value=httpx.Response(200, text="ok")
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+    body = b"\xffOPENAI_API_KEY=" + OPENAI_FAKE.encode()
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/raw",
+            headers={"Content-Type": "text/plain"},
+            content=body,
+        )
+
+    assert response.status_code == 200
+    assert route.calls.last.request.content == b"\xffOPENAI_API_KEY=[REDACTED_SECRET]"
 
 
 @pytest.mark.asyncio
@@ -174,6 +224,27 @@ async def test_x_target_base_url_overrides_target() -> None:
             headers={"X-Target-Base-URL": "https://alt.example/v1"},
             json={"input": "hello"},
         )
+
+    assert response.status_code == 200
+    assert route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_deduplicates_version_prefix_for_nested_api_base() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://openrouter.example/api/v1",
+            block_private_targets=False,
+        )
+    )
+    route = respx.post("https://openrouter.example/api/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post("/v1/chat/completions", json={"messages": []})
 
     assert response.status_code == 200
     assert route.called
@@ -534,45 +605,18 @@ async def test_configured_target_key_is_not_forwarded_to_dynamic_target() -> Non
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_compressed_response_is_forwarded_without_corruption() -> None:
+async def test_provider_response_is_forwarded_without_scanning_or_corruption() -> None:
     settings = Settings(
         target=TargetConfig(
             default_base_url="https://upstream.example/v1", block_private_targets=False
         ),
         redaction=RedactionConfig(engine="basic"),
     )
-    respx.post("https://upstream.example/v1/responses").mock(
-        return_value=httpx.Response(
-            200,
-            content=gzip.compress(b'{"ok":true}'),
-            headers={"content-type": "application/json", "content-encoding": "gzip"},
-        )
-    )
-    transport = httpx.ASGITransport(app=create_app(settings))
-
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-        response = await client.post("/v1/responses", json={"input": "hello"})
-
-    assert response.status_code == 200
-    assert response.headers["content-encoding"] == "gzip"
-    assert response.json() == {"ok": True}
-
-
-@pytest.mark.asyncio
-@respx.mock
-async def test_compressed_scanned_response_drops_stale_representation_headers() -> None:
-    settings = Settings(
-        target=TargetConfig(
-            default_base_url="https://upstream.example/v1", block_private_targets=False
-        ),
-        redaction=RedactionConfig(engine="basic", scan_responses=True),
-    )
     secret = "sk-" + "FixtureToken000000000000000000000"
-    body = json.dumps({"content": secret}).encode()
     respx.post("https://upstream.example/v1/responses").mock(
         return_value=httpx.Response(
             200,
-            content=gzip.compress(body),
+            content=gzip.compress(json.dumps({"content": secret}).encode()),
             headers={
                 "content-type": "application/json",
                 "content-encoding": "gzip",
@@ -586,9 +630,9 @@ async def test_compressed_scanned_response_drops_stale_representation_headers() 
         response = await client.post("/v1/responses", json={"input": "hello"})
 
     assert response.status_code == 200
-    assert "content-encoding" not in response.headers
-    assert "etag" not in response.headers
-    assert response.json() == {"content": "[REDACTED_SECRET]"}
+    assert response.headers["content-encoding"] == "gzip"
+    assert response.headers["etag"] == '"compressed-fixture"'
+    assert response.json() == {"content": secret}
 
 
 @pytest.mark.asyncio
@@ -817,3 +861,98 @@ async def test_responses_to_chat_bridge_maps_chat_tool_calls() -> None:
         "name": "exec_command",
         "arguments": '{"cmd":"pwd"}',
     }
+
+
+@pytest.mark.asyncio
+async def test_malformed_dynamic_target_returns_client_error() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Target-Base-URL": "https://[]"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid target URL"
+
+
+@pytest.mark.asyncio
+async def test_unresolvable_idna_target_returns_client_error() -> None:
+    settings = Settings(target=TargetConfig(default_base_url="https://upstream.example/v1"))
+    transport = httpx.ASGITransport(app=create_app(settings))
+    long_label = "a" * 64
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"X-Target-Base-URL": f"https://{long_label}.example/v1"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "target host could not be resolved"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_disabled_redaction_preserves_json_body_bytes() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(enabled=False),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+    body = b'{ "input" : "preserve whitespace" }\n'
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Content-Type": "application/json"},
+            content=body,
+        )
+
+    assert response.status_code == 200
+    assert route.calls.last.request.content == body
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_connection_named_hop_headers_are_not_forwarded() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        )
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(
+            200,
+            json={"ok": True},
+            headers={"Connection": "X-Upstream-Hop", "X-Upstream-Hop": "remove-me"},
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Connection": "X-Client-Hop", "X-Client-Hop": "remove-me"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    assert "x-client-hop" not in route.calls.last.request.headers
+    assert "x-upstream-hop" not in response.headers

@@ -137,7 +137,6 @@ def doctor(
         "target": settings.target.default_base_url,
         "redaction": settings.redaction.enabled,
         "engine": settings.redaction.engine,
-        "response_scanning": settings.redaction.scan_responses,
         "responses_to_chat": settings.compat.responses_to_chat,
         "telemetry": False,
     }

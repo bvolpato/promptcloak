@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from promptcloak import PromptCloak, redact_messages, redact_params, scan_params
 from promptcloak.config import RedactionConfig, RuleConfig
 from tests.fixtures import GEMINI_FAKE, OPENAI_FAKE
@@ -15,6 +17,11 @@ class FixtureMessage:
 
     def model_copy(self, update: dict[str, Any]) -> FixtureMessage:
         return replace(self, **update)
+
+
+class FixturePydanticMessage(BaseModel):
+    content: str
+    additional_kwargs: dict[str, Any] = Field(default_factory=dict)
 
 
 def test_redact_messages_filters_openai_dict_messages_without_mutating_original() -> None:
@@ -56,6 +63,20 @@ def test_redact_messages_filters_langchain_message_objects() -> None:
     assert isinstance(redacted[0], FixtureMessage)
     assert messages[0].content.endswith(GEMINI_FAKE)
     assert redacted[0].content == "secret=[REDACTED_SECRET]"
+
+
+def test_redact_messages_scans_all_pydantic_message_fields() -> None:
+    messages = [
+        FixturePydanticMessage(
+            content="hello",
+            additional_kwargs={"tool_token": OPENAI_FAKE},
+        )
+    ]
+
+    redacted = redact_messages(messages)
+
+    assert messages[0].additional_kwargs["tool_token"] == OPENAI_FAKE
+    assert redacted[0].additional_kwargs["tool_token"] == "[REDACTED_SECRET]"
 
 
 def test_scan_params_returns_redaction_stats() -> None:

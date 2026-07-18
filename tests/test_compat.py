@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from promptcloak.compat import chat_stream_to_responses
+from promptcloak.compat import chat_stream_to_responses, responses_to_chat_payload
 
 
 async def _collect(parts: list[bytes]) -> str:
@@ -51,3 +51,29 @@ async def test_chat_stream_accepts_crlf_events_split_between_chunks() -> None:
     deltas = [event["delta"] for event in _events(output) if event["type"].endswith(".delta")]
     assert deltas == ["hello"]
     assert any(event["type"] == "response.completed" for event in _events(output))
+
+
+def test_responses_vision_input_uses_chat_image_url_shape() -> None:
+    chat = responses_to_chat_payload(
+        {
+            "model": "fixture-model",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "inspect"},
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.test/image.png",
+                            "detail": "high",
+                        },
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert chat["messages"][0]["content"][1] == {
+        "type": "image_url",
+        "image_url": {"url": "https://example.test/image.png", "detail": "high"},
+    }

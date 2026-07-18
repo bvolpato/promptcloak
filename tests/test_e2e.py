@@ -129,34 +129,6 @@ async def test_e2e_text_body_redaction_handles_case_insensitive_content_type() -
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_e2e_response_scanning_redacts_json_case_insensitive_content_type() -> None:
-    settings = Settings(
-        target=TargetConfig(
-            default_base_url="https://upstream.example/v1",
-            block_private_targets=False,
-        ),
-        redaction=RedactionConfig(engine="basic", scan_responses=True),
-    )
-    respx.post("https://upstream.example/v1/chat/completions").mock(
-        return_value=httpx.Response(
-            200,
-            json={"choices": [{"message": {"content": f"OPENAI_API_KEY={OPENAI_FAKE}"}}]},
-            headers={"Content-Type": "Application/JSON; charset=utf-8"},
-        )
-    )
-
-    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
-        response = await client.post("/v1/chat/completions", json={"messages": []})
-
-    assert response.status_code == 200
-    assert_no_fixture_values(response.json())
-    assert response.json()["choices"][0]["message"]["content"] == (
-        "OPENAI_API_KEY=[REDACTED_SECRET]"
-    )
-
-
-@pytest.mark.asyncio
 async def test_e2e_target_url_userinfo_is_rejected() -> None:
     settings = Settings(
         target=TargetConfig(
