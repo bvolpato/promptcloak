@@ -4,7 +4,7 @@ PromptCloak ships through signed Git tag, GitHub Actions, Homebrew tap, GitHub P
 
 ## Release
 
-1. Keep version aligned in `pyproject.toml`, `src/promptcloak/version.py`, Helm chart metadata, Helm image tag, docs, site, and `uv.lock`.
+1. Keep same version in `pyproject.toml`, `src/promptcloak/version.py`, Helm chart metadata, Helm image tag, docs, site, and `uv.lock`.
 2. Run `AGENTS_TESTING.md` checks.
 3. Commit and push release metadata to `main`.
 4. Wait for `ci` and `codeql` on pushed commit.

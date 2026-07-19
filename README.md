@@ -9,30 +9,34 @@
 
 **Redact secrets before prompts reach an LLM provider.**
 
-PromptCloak is a local proxy and Python library for coding agents, SDKs, and OpenAI-compatible backends. It scans request bodies and query parameters before forwarding, then replaces API keys, passwords, tokens, private keys, signed URLs, and custom matches.
+PromptCloak is a local proxy and Python library for coding agents, SDKs, and
+OpenAI-compatible backends. It scans request bodies and query parameters, replaces
+detected credentials and custom matches, then forwards the request.
 
-PromptCloak has no telemetry or phone-home behavior. Custom rules can store only secret tails.
+Scanning stays local. PromptCloak has no telemetry or phone-home behavior.
 
 ![PromptCloak site preview](site/hero.png)
 
 Website: `https://bvolpato.github.io/promptcloak/`
-Repository: `https://github.com/bvolpato/promptcloak`
+
 Agent integration prompt: [`PROMPT.md`](PROMPT.md)
 
-## What you get
+## Choose a mode
 
 | Need | Use |
 | --- | --- |
 | Protect coding agents and IDEs | Run `promptcloak serve` and point OpenAI-compatible clients at `http://127.0.0.1:8000/v1`. |
 | Protect SDK calls in your app | Import `redact_messages`, `redact_params`, or `redact_payload`. |
-| Route to different providers | Use config defaults or `X-Target-Base-URL` per request. |
-| Prove redaction works | Send fixture tokens to an echo target instead of asking a model to repeat secrets. |
 
-## What gets redacted
+## Coverage
 
-Default rules cover provider keys, personal access tokens, passwords, JWTs, signed URLs, URL credentials, PEM/PGP private keys, and common secret fields such as `api_key`, `token`, `authorization`, `password`, `signed_url`, and `credentials`.
+Default rules cover provider keys, personal access tokens, passwords, JWTs,
+signed URLs, URL credentials, PEM/PGP private keys, and common secret fields such
+as `api_key`, `token`, `authorization`, `password`, `signed_url`, and
+`credentials`.
 
-Coverage is deterministic: `bc-detect-secrets` plus PromptCloak provider rules and your exact-tail or regex rules. Entropy-only matching is disabled so redaction stays predictable.
+Detection uses deterministic provider rules plus your exact-tail or regex rules.
+Entropy-only matching is disabled to avoid unpredictable false positives.
 
 ## Security boundary
 
@@ -40,60 +44,79 @@ Coverage is deterministic: `bc-detect-secrets` plus PromptCloak provider rules a
 - Audit logs record redaction counts and rule names without storing secret values.
 - Upstream auth headers still have to reach the provider when used for authentication.
 - Unknown private token formats need a custom exact-tail or regex rule.
-- `--debug-requests` can print raw local request bodies; use it only with fixture data.
 
-## Quick start
+See [SECURITY.md](SECURITY.md) for deployment defaults and remaining limits.
+
+## Install
+
+Homebrew:
 
 ```bash
 brew tap bvolpato/tap
 brew install promptcloak
+promptcloak version
+```
+
+uv:
+
+```bash
+uv tool install \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
+promptcloak doctor
+```
+
+Source:
+
+```bash
+git clone https://github.com/bvolpato/promptcloak.git
+cd promptcloak
+uv sync --extra dev --locked
+uv run promptcloak doctor
+```
+
+ASGI servers can load `promptcloak.asgi:app` directly. Importing CLI or proxy
+helpers does not load user config until a command or app requests it.
+
+## Run proxy
+
+Configure an upstream, keep its key in your shell, and start PromptCloak:
+
+```bash
 promptcloak init --target-base-url https://api.openai.com/v1
-export OPENAI_API_KEY="<upstream-provider-key>"
+export OPENAI_API_KEY="<openai-upstream-key>"
 promptcloak serve
 ```
 
-Send traffic through PromptCloak:
+Point clients at `http://127.0.0.1:8000/v1`. For example:
 
 ```bash
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-5.5",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Here is my .env: OPENAI_API_KEY=<api-key-like-value>"
-      }
-    ]
+    "messages": [{
+      "role": "user",
+      "content": "Here is my .env: OPENAI_API_KEY=<api-key-like-value>"
+    }]
   }'
 ```
 
-Upstream sees:
+Provider receives `OPENAI_API_KEY=[REDACTED_SECRET]` in request content.
 
-```text
-OPENAI_API_KEY=[REDACTED_SECRET]
-```
+## Verify redaction
 
-Partial masking is available, but full masking is safer and default:
-
-```yaml
-redaction:
-  redact_mode: "partial"
-```
-
-## Deterministic redaction smoke
-
-Do not verify redaction by asking an LLM to repeat what it received. Models can refuse, infer, summarize, or misstate what happened. Send a fixture token to an echo target:
+A model reply cannot verify the forwarded request. Send a fixture token to an echo
+endpoint and inspect the echoed body:
 
 ```bash
 FAKE_GEMINI_KEY="AI""zaSyFixtureToken000000000000000000000"
 
-curl -fsS http://127.0.0.1:8000/v1/chat/completions \
-  -H "X-Target-Base-URL: https://httpbin.org/anything" \
+curl --compressed -fsS http://127.0.0.1:8000/post \
+  -H "X-Target-Base-URL: https://postman-echo.com" \
   -H "Content-Type: application/json" \
   --data "$(jq -nc --arg key "$FAKE_GEMINI_KEY" \
     '{messages:[{role:"user",content:("GEMINI_API_KEY=" + $key)}]}')" \
-  | jq -r '.json.messages[0].content'
+  | jq -r '.data.messages[0].content'
 ```
 
 Expected output:
@@ -102,53 +125,19 @@ Expected output:
 GEMINI_API_KEY=[REDACTED_SECRET]
 ```
 
-PromptCloak audit logs include counts and rule names, never secret values.
-
-## Install with Homebrew
-
-```bash
-brew tap bvolpato/tap
-brew install promptcloak
-promptcloak version
-promptcloak init --target-base-url https://api.openai.com/v1
-```
-
-Foreground mode keeps the upstream key in your shell:
-
-```bash
-export OPENAI_API_KEY="<openai-upstream-key>"
-promptcloak serve
-```
-
-Service mode needs the upstream key in config or service-manager env:
+Audit logs omit matched values and include counts and rule names. Homebrew users
+can run PromptCloak as a background service after configuring its environment:
 
 ```bash
 brew services start bvolpato/tap/promptcloak
 ```
 
-## Install with uv
-
-```bash
-uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
-promptcloak doctor
-```
-
-## Install from source
-
-```bash
-git clone https://github.com/bvolpato/promptcloak.git
-cd promptcloak
-uv sync --extra dev
-uv run promptcloak doctor
-```
-
-ASGI servers can load `promptcloak.asgi:app` directly. Importing CLI or proxy helpers does not
-load user config until a command or app explicitly requests it.
-
 ## Use as a library
 
-PromptCloak can run without proxy service. Import redaction helpers and filter request values before passing them to any SDK. PromptCloak does not install OpenAI, LiteLLM, LangChain, or Anthropic SDKs; examples assume those are already in your app.
+PromptCloak can run without running the proxy service. Import redaction helpers and filter
+request values before passing them to any SDK. PromptCloak does not install OpenAI,
+LiteLLM, LangChain, or Anthropic SDKs; examples assume those are already in your
+app.
 
 ```bash
 uv add \
@@ -353,7 +342,8 @@ redaction:
       name: openai-style-token
 ```
 
-Best practice: store only key tails in `rules`, never full secrets.
+Store only key tails in exact rules. Full masking is default; partial masking is
+available through `redact_mode: partial`.
 
 ## Supported routes
 
@@ -365,11 +355,12 @@ PromptCloak forwards any path, with first-class tests for:
 - `/v1/models`
 - `/v1/messages` for Claude-compatible gateways
 
-It preserves streaming responses, tools, structured outputs, vision payloads, and unknown provider fields because it redacts recursively without reshaping request schemas.
+Tests cover streaming responses, tool payloads, and vision payloads. PromptCloak
+redacts recursively without reshaping JSON request schemas.
 
-## Dynamic backends
+## Provider targets
 
-Set default backend in config, or override per request:
+Set default backend in config, or choose one per request:
 
 ```bash
 curl http://127.0.0.1:8000/v1/responses \
@@ -385,16 +376,13 @@ Configured target keys are bound to `target.default_base_url`. A request that ch
 `X-Target-Base-URL` must also provide its matching `X-Target-API-Key` or
 `X-Target-Authorization`.
 
-An empty `target.allowed_base_urls` permits any public target. Add URLs to restrict dynamic
-routing. Set `block_private_targets: false` only for trusted local targets.
+An empty `target.allowed_base_urls` permits any public target. Add URLs to restrict
+dynamic routing. Set `block_private_targets: false` only for trusted local targets.
 
 Per-request rules are exact matches by default. Regex rules remain available in trusted config.
 Set `redaction.allow_extra_regex_rules: true` only for authenticated clients you trust.
 
-## Provider targets
-
-PromptCloak forwards routes without reshaping provider payloads. Pick a default target
-in config, or pass the target per request.
+PromptCloak forwards routes without reshaping provider payloads.
 
 | Target | Base URL | Auth header | Notes |
 | --- | --- | --- | --- |
@@ -402,14 +390,6 @@ in config, or pass the target per request.
 | OpenRouter | `https://openrouter.ai/api/v1` | `authorization` | OpenAI-compatible gateway. Use provider-prefixed model names. |
 | Anthropic / Claude-compatible | `https://api.anthropic.com` | `x-api-key` | Forward `/v1/messages`; PromptCloak does not translate OpenAI JSON into Anthropic JSON. |
 | Local Ollama or vLLM | `http://127.0.0.1:11434/v1` or another local `/v1` endpoint | provider-specific | Set `block_private_targets: false` only for local-only configs. |
-
-OpenAI default:
-
-```bash
-export OPENAI_API_KEY="<openai-upstream-key>"
-promptcloak init --target-base-url https://api.openai.com/v1
-promptcloak serve
-```
 
 OpenRouter per request:
 
@@ -452,9 +432,12 @@ target:
 
 ## Codex
 
-Codex speaks OpenAI Responses. Some gateways expose Chat Completions only. PromptCloak can bridge Codex `/v1/responses` traffic to upstream `/v1/chat/completions` with `compat.responses_to_chat: true`.
+Codex uses OpenAI Responses. For gateways that only expose Chat Completions, set
+`compat.responses_to_chat: true`. PromptCloak redacts request content before
+translating it.
 
-OpenRouter is one Codex-friendly target because PromptCloak can bridge Codex Responses traffic to Chat Completions. For OpenRouter through PromptCloak, put `env_key = "OPENROUTER_API_KEY"` in the Codex provider. Codex attaches the key to localhost requests, and PromptCloak forwards that Authorization header to the allowed OpenRouter upstream.
+This OpenRouter profile keeps key in `OPENROUTER_API_KEY`. Codex sends it to local
+proxy, which forwards it only to allowed OpenRouter target.
 
 PromptCloak config:
 
@@ -535,7 +518,7 @@ Bridge notes:
 
 OpenCode supports custom OpenAI-compatible providers through `@ai-sdk/openai-compatible` and `options.baseURL`.
 
-Option A: set upstream provider on PromptCloak:
+Set upstream on PromptCloak:
 
 ```bash
 export PROMPTCLOAK_TARGET_BASE_URL="https://api.openai.com/v1"
@@ -543,7 +526,7 @@ export PROMPTCLOAK_TARGET_API_KEY="<openai-upstream-key>"
 promptcloak serve
 ```
 
-Option B: set upstream provider per request from OpenCode headers:
+Or set it per request in OpenCode:
 
 `opencode.json`
 
@@ -572,7 +555,9 @@ Option B: set upstream provider per request from OpenCode headers:
 }
 ```
 
-Upstream provider URL and key are `X-Target-Base-URL` and `X-Target-API-Key`, or `PROMPTCLOAK_TARGET_BASE_URL` and `PROMPTCLOAK_TARGET_API_KEY` when configured on PromptCloak.
+Use `X-Target-Base-URL` and `X-Target-API-Key` for per-request routing. Use
+`PROMPTCLOAK_TARGET_BASE_URL` and `PROMPTCLOAK_TARGET_API_KEY` when PromptCloak
+owns upstream config.
 
 ## Claude Code
 
@@ -603,27 +588,21 @@ PromptCloak forwards `/v1/messages` to configured upstream. It does not translat
 
 ## Redaction engine
 
-PromptCloak uses `bc-detect-secrets` directly, plus deterministic rules for provider tokens and user-defined exact-tail or regex matches. No model runtime involved.
+PromptCloak uses `bc-detect-secrets`, provider token patterns, and user-defined
+exact-tail or regex matches. It does not load or call a model.
 
 Coverage includes fixture-shaped examples for:
 
-- GitHub classic and fine-grained PATs
-- Atlassian API tokens
-- OpenAI project/API keys
-- Gemini API keys
-- Anthropic API keys
-- OpenRouter keys
-- Z.AI, MiniMax, DeepSeek, Codex/OpenAI, xAI/Grok, and Fireworks keys when labeled or prefix-shaped
-- GitLab, Slack, Stripe, AWS, Google API keys
-- 1Password, Databricks, DigitalOcean, Hugging Face, Linear, npm, PyPI, SendGrid, Telegram, Twilio, Vault, Shopify, Sentry
-- Cloudflare API keys/tokens in assignment form or `X-Auth-Key` / `CF-Access-Token` headers
-- AWS, Google Cloud Storage, and Azure signed URL signatures and credential parameters
-- JWTs
-- PEM, encrypted PEM, and PGP private keys
-- Authorization-style headers and URL credentials in request bodies
-- `password=...`, `token=...`, `api_key=...`
-- JSON object fields named like `api_key`, `token`, `secret`, `password`, `authorization`, `credentials`, `signed_url`, or `sas_token`
-- User exact-tail and regex rules
+- AI provider keys: OpenAI/Codex, Anthropic, Gemini, OpenRouter, Z.AI,
+  MiniMax, DeepSeek, xAI/Grok, and Fireworks.
+- Developer and cloud credentials: GitHub, GitLab, Atlassian, AWS,
+  Cloudflare, Slack, Stripe, Google Cloud, Azure, npm, PyPI, and other common
+  service tokens.
+- Structured credentials: JWTs, signed URLs, URL userinfo, PEM keys, encrypted
+  PEM keys, and PGP private keys.
+- Labeled values and JSON fields such as `password`, `token`, `api_key`,
+  `authorization`, `credentials`, `signed_url`, and `sas_token`.
+- User-defined exact-tail and regex rules for private formats.
 
 JSON is scanned structurally. Query parameters and unencoded non-JSON bodies, including
 multipart requests, are scanned without changing unrelated bytes. Encoded request bodies are
@@ -638,7 +617,9 @@ custom rules for opaque internal formats.
 uv run promptcloak encrypt-rules
 ```
 
-This creates `~/.config/promptcloak/key` with mode `0600`, encrypts `redaction.rules` using AES-GCM, writes `redaction.encrypted_rules`, and clears plain rules.
+This creates `~/.config/promptcloak/key` with mode `0600`, encrypts
+`redaction.rules` with AES-GCM, writes `redaction.encrypted_rules`, and clears
+plain rules.
 
 You can also provide key material through:
 
@@ -663,18 +644,10 @@ curl -fsS http://127.0.0.1:8000/healthz
 docker stop promptcloak
 ```
 
-Local build:
+Build current checkout:
 
 ```bash
 docker build -t promptcloak:local .
-docker run -d --name promptcloak --rm \
-  -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
-  promptcloak:local
-
-curl -fsS http://127.0.0.1:8000/healthz
-docker stop promptcloak
 ```
 
 Compose:
@@ -708,19 +681,6 @@ curl -fsS http://127.0.0.1:8000/healthz
 helm uninstall promptcloak
 ```
 
-Use locally built images in Kind:
-
-```bash
-docker build -t promptcloak:local .
-kind load docker-image promptcloak:local
-helm install promptcloak ./charts/promptcloak \
-  --set image.repository=promptcloak \
-  --set image.tag=local \
-  --set image.pullPolicy=Never \
-  --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
-```
-
 Release asset:
 
 ```bash
@@ -734,21 +694,6 @@ Helm enables proxy authentication and generates a key by default. Pass
 `--set-string serverAuth.apiKey="$PROMPTCLOAK_SERVER_API_KEY"` to choose it. Send
 `Authorization: Bearer $PROMPTCLOAK_SERVER_API_KEY` on proxied requests. Health probes remain
 unauthenticated.
-
-## Security model
-
-PromptCloak protects request bodies before they leave your machine. It masks sensitive auth headers in debug logs, but it cannot remove upstream credentials from provider-bound auth headers because providers need those credentials to authenticate the request. Recommended setup:
-
-- Put upstream provider key in PromptCloak config or env.
-- Keep `forward_client_authorization: false` unless you intentionally want client auth forwarded.
-- Use `api_key_header: x-api-key` for Anthropic-compatible upstreams.
-- Set `server.api_key` only when exposing PromptCloak beyond `127.0.0.1`.
-- Store only secret tails in redaction rules.
-- Keep `block_private_targets: true`.
-- Set `allowed_base_urls` in shared/team installs.
-- Treat provider responses as untrusted. PromptCloak returns them without scanning or redaction.
-- Add custom rules for internal tokens or providers without stable public prefixes.
-- In library mode, call `redact_messages`, `redact_params`, or `redact_payload` before SDK calls.
 
 ## Emergency request tracing
 
@@ -765,13 +710,7 @@ uv build
 uv run promptcloak scan 'OPENAI_API_KEY=<api-key-like-value>'
 ```
 
-Tests cover nested OpenAI, Responses, and Claude-style payloads, dynamic upstream
-headers, audit logs, emergency tracing, transparent responses, target allowlists, text
-bodies, and provider-shaped fixture tokens. Fixtures are split in source so no real or
-contiguous fake keys are committed.
-
-Releases include signed tags, checksums, build provenance, source, wheel, Helm chart,
-Homebrew formula, and GHCR images with SBOM attestations. See
-[CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
-[SECURITY_AUDIT.md](SECURITY_AUDIT.md) before opening issues or pull requests. Never
-post real secrets in public project surfaces.
+Fixtures are split in source so no real or contiguous fake keys are committed.
+Release and test commands live in [CONTRIBUTING.md](CONTRIBUTING.md). Report
+security problems through the private path in [SECURITY.md](SECURITY.md), without
+posting real secrets.

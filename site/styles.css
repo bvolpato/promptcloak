@@ -250,25 +250,6 @@ button.button {
   background: rgba(122, 183, 255, 0.08);
 }
 
-.hero-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 28px;
-  color: var(--muted);
-  font-size: 0.92rem;
-}
-
-.hero-facts span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  padding: 0 12px;
-  background: rgba(10, 13, 18, 0.54);
-}
-
 pre {
   min-width: 0;
   overflow: hidden;
@@ -580,13 +561,4 @@ footer a {
       var(--bg);
   }
 
-  .hero-facts {
-    gap: 8px;
-  }
-
-  .hero-facts span {
-    min-height: 30px;
-    padding: 0 10px;
-    font-size: 0.82rem;
-  }
 }

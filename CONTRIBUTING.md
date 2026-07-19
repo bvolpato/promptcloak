@@ -1,11 +1,11 @@
 # Contributing
 
-PromptCloak is local-first security software. Keep changes small, tested, and explicit about privacy impact.
+Changes to redaction, forwarding, config, logs, or tracing need an explicit privacy review.
 
 ## Setup
 
 ```bash
-uv sync --extra dev
+uv sync --extra dev --group audit --locked
 uv run promptcloak doctor
 ```
 
@@ -41,10 +41,11 @@ Before tagging, keep these versions identical:
 - `charts/promptcloak/values.yaml`
 - `uv.lock`
 
-The release workflow reruns checks, builds source/wheel/Helm artifacts, writes `SHA256SUMS`,
-attests build provenance, publishes an SBOM-backed container image, and uploads release assets.
+Release workflow reruns checks, builds source, wheel, and Helm artifacts, writes
+`SHA256SUMS`, attests build provenance, publishes SBOM-backed container image, and
+uploads release assets.
 
-If a downstream publishing step fails after release creation, fix workflow on `main` and rerun
+If publishing fails after release creation, fix workflow on `main` and rerun
 existing immutable tag:
 
 ```bash
@@ -60,8 +61,8 @@ gh workflow run release.yml --ref main -f tag="v${VERSION}"
 
 ## Redaction rules
 
-- Deterministic local rules beat model-based detection.
-- Avoid entropy-only detectors unless false positives are tightly bounded.
+- Keep detection local and deterministic. Do not add model calls.
+- Do not enable entropy-only detectors without tightly bounded false positives.
 - Tests for new provider patterns must prove full redaction and comma-separated redaction.
 
 ## Emergency request tracing
