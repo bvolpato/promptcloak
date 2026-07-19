@@ -1,20 +1,18 @@
 # Integrate PromptCloak
 
-Integrate PromptCloak so secrets in LLM request content are redacted before they
-leave this machine or application process. Complete setup, configuration, and
-verification while following existing project conventions.
+Add PromptCloak to redact secrets from LLM request content before it leaves this
+machine or application process.
 
-## Before editing
+## Inspect integration
 
 1. Inspect current LLM clients, agent configs, package manager, runtime, and deployment model.
-2. Read current PromptCloak README and use its current release commands. PromptCloak is distributed through GitHub releases rather than PyPI.
+2. Read current PromptCloak README and use release commands shown there. This release
+   is distributed through GitHub releases; do not install the unrelated PyPI project.
 3. Choose proxy mode or Python library mode based on where requests are created.
-4. Keep changes limited to PromptCloak integration and required documentation.
 
-Use proxy mode for coding agents, non-Python applications, shared local routing,
-or clients that support a custom OpenAI or Anthropic base URL. Use library mode
-when Python code constructs requests and can redact values immediately before an
-SDK call.
+Use proxy mode for coding agents, non-Python applications, or clients that accept
+a custom OpenAI or Anthropic base URL. Use library mode when Python code can
+redact request values immediately before an SDK call.
 
 ## Install
 
@@ -98,16 +96,15 @@ redaction:
   redact_mode: full
 ```
 
-Use `api_key_header: x-api-key` for Anthropic-compatible upstreams. Keep one
-configured target when possible. For per-request routing, allow each public base
-URL explicitly and send matching `X-Target-Base-URL` and `X-Target-API-Key`
-headers. Never forward a configured target key to a different host.
+Use `api_key_header: x-api-key` for Anthropic-compatible upstreams. For
+per-request routing, add trusted public base URLs to the allowlist and send matching
+`X-Target-Base-URL` and `X-Target-API-Key` headers. Never forward the configured
+target key to a different host.
 
-Point OpenAI-compatible clients at `http://127.0.0.1:8000/v1`. Point Claude Code
-at `http://127.0.0.1:8000` through `ANTHROPIC_BASE_URL`. Some SDKs require a local
-API-key value even when PromptCloak has no `server.api_key`; use a non-secret
-placeholder in that case. Do not invent a PromptCloak key unless local proxy auth
-is enabled.
+Point OpenAI-compatible clients at `http://127.0.0.1:8000/v1`. Set Claude Code
+`ANTHROPIC_BASE_URL` to `http://127.0.0.1:8000`. Some SDKs require a local API-key
+value even when PromptCloak has no `server.api_key`; use a non-secret placeholder.
+Do not invent a PromptCloak key unless local proxy auth is enabled.
 
 For Codex, OpenCode, and Claude Code, follow their dedicated README sections.
 Preserve protocol expectations: Codex uses Responses, OpenCode can use an
@@ -140,17 +137,17 @@ tool payloads, and background jobs.
 
 1. Run project lint, type checks, and focused tests.
 2. In proxy mode, confirm `GET /healthz` reports redaction enabled and telemetry disabled.
-3. Test redaction against an echo target, never a model:
+3. Send a fixture request to the echo endpoint and inspect the forwarded body:
 
 ```bash
 FAKE_KEY="AI""zaSyFixtureToken000000000000000000000"
 
-curl -fsS http://127.0.0.1:8000/v1/chat/completions \
-  -H "X-Target-Base-URL: https://httpbin.org/anything" \
+curl --compressed -fsS http://127.0.0.1:8000/post \
+  -H "X-Target-Base-URL: https://postman-echo.com" \
   -H "Content-Type: application/json" \
   --data "$(jq -nc --arg key "$FAKE_KEY" \
     '{messages:[{role:"user",content:("GEMINI_API_KEY=" + $key)}]}')" \
-  | jq -r '.json.messages[0].content'
+  | jq -r '.data.messages[0].content'
 ```
 
 Expected output:
@@ -159,5 +156,5 @@ Expected output:
 GEMINI_API_KEY=[REDACTED_SECRET]
 ```
 
-Confirm fixture value is absent from logs. Report selected mode, changed files,
-credential handling, commands run, and exact verification result.
+Confirm fixture value is absent from logs. Report mode, changed files, credential
+handling, commands run, and exact verification result.
