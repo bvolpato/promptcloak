@@ -167,9 +167,7 @@ from promptcloak import PromptCloak
 from promptcloak.config import RedactionConfig, RuleConfig
 
 cloak = PromptCloak(
-    RedactionConfig(
-        rules=[RuleConfig(type="exact", value="abcd1234", name="tail-only")]
-    )
+    RedactionConfig(rules=[RuleConfig(type="exact", value="abcd1234", name="tail-only")])
 )
 
 safe_messages = cloak.messages(messages)
