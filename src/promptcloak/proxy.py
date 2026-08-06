@@ -19,24 +19,27 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from promptcloak.audit import AuditLogger
 from promptcloak.compat import (
+    ResponsesInputError,
     chat_response_to_responses,
     chat_stream_to_responses,
     responses_to_chat_payload,
 )
 from promptcloak.config import RuleConfig, Settings, expand_env_values, get_settings
 from promptcloak.patterns import SENSITIVE_FIELD_RE
-from promptcloak.redaction import RedactionStats, SecretRedactor
+from promptcloak.redaction import RedactionKeyCollisionError, RedactionStats, SecretRedactor
 from promptcloak.version import __version__
 
 logger = logging.getLogger("promptcloak")
 
 DROP_REQUEST_HEADERS = {
     "content-length",
+    "cookie",
     "host",
     "connection",
     "keep-alive",
     "proxy-authenticate",
     "proxy-authorization",
+    "set-cookie",
     "te",
     "trailer",
     "transfer-encoding",
@@ -44,11 +47,13 @@ DROP_REQUEST_HEADERS = {
 }
 DROP_RESPONSE_HEADERS = {
     "content-length",
+    "cookie",
     "transfer-encoding",
     "connection",
     "keep-alive",
     "proxy-authenticate",
     "proxy-authorization",
+    "set-cookie",
     "te",
     "trailer",
     "upgrade",
@@ -136,9 +141,11 @@ async def forward_request(request: Request, path: str) -> Response:
             )
         target_url = _target_url(request, "/v1/chat/completions", settings)
         await _validate_target(target_url, settings)
-        content = json.dumps(responses_to_chat_payload(json_payload), separators=(",", ":")).encode(
-            "utf-8"
-        )
+        try:
+            chat_payload = responses_to_chat_payload(json_payload)
+        except ResponsesInputError:
+            raise HTTPException(status_code=400, detail="invalid Responses input item") from None
+        content = json.dumps(chat_payload, separators=(",", ":")).encode("utf-8")
 
     _debug_request(request, path, target_url, body, content, stats, settings)
 
@@ -280,7 +287,13 @@ def _redact_request_body(
             payload = json.loads(body)
         except json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="invalid JSON request body") from None
-        result = redactor.redact_payload(payload)
+        try:
+            result = redactor.redact_payload(payload)
+        except RedactionKeyCollisionError:
+            raise HTTPException(
+                status_code=400,
+                detail="request contains colliding keys after redaction",
+            ) from None
         return (
             json.dumps(result.value, separators=(",", ":")).encode("utf-8"),
             result.stats,
@@ -440,8 +453,14 @@ def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
             continue
         if lowered in CLIENT_AUTH_HEADERS:
             has_target_auth = configured_api_key or target_api_key or target_authorization
-            if has_target_auth or not settings.target.forward_client_authorization:
+            if (
+                settings.server.api_key
+                or has_target_auth
+                or not settings.target.forward_client_authorization
+            ):
                 continue
+        elif SENSITIVE_FIELD_RE.search(lowered):
+            continue
         if lowered.startswith("x-redact-"):
             continue
         headers[key] = value

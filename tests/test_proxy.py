@@ -8,7 +8,7 @@ import respx
 
 from promptcloak.config import CompatConfig, RedactionConfig, ServerConfig, Settings, TargetConfig
 from promptcloak.proxy import create_app
-from tests.fixtures import OPENAI_FAKE
+from tests.fixtures import OPENAI_FAKE, PROVIDER_FIXTURES
 
 
 @pytest.mark.asyncio
@@ -441,6 +441,116 @@ async def test_client_authorization_forwarded_only_when_opted_in() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_proxy_auth_is_never_forwarded_if_validation_is_bypassed() -> None:
+    settings = Settings(
+        server=ServerConfig(api_key="local-fixture-token"),
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    app = create_app(settings)
+    app.state.settings.target.forward_client_authorization = True
+    transport = httpx.ASGITransport(app=app)
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={"Authorization": "Bearer local-fixture-token"},
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    assert "authorization" not in route.calls.last.request.headers
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_auth_allows_dedicated_target_authorization() -> None:
+    settings = Settings(
+        server=ServerConfig(api_key="local-fixture-token"),
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={
+                "Authorization": "Bearer local-fixture-token",
+                "X-Target-Authorization": "Bearer upstream-fixture-token",
+            },
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    assert route.calls.last.request.headers["authorization"] == "Bearer upstream-fixture-token"
+    assert "x-target-authorization" not in route.calls.last.request.headers
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_sensitive_headers_do_not_cross_proxy_boundary() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(
+            200,
+            json={"ok": True},
+            headers={
+                "Cookie": "provider-fixture-cookie",
+                "Set-Cookie": "provider_session=fixture; Secure",
+                "Anthropic-Version": "2023-06-01",
+                "X-Provider-Trace-ID": "fixture-trace",
+            },
+        )
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={
+                "Cookie": "client_session=fixture",
+                "Set-Cookie": "client_session=fixture",
+                "X-Custom-Secret": OPENAI_FAKE,
+                "Anthropic-Version": "2023-06-01",
+                "X-Provider-Trace-ID": "fixture-trace",
+            },
+            json={"input": "hello"},
+        )
+
+    assert response.status_code == 200
+    forwarded_headers = route.calls.last.request.headers
+    assert "cookie" not in forwarded_headers
+    assert "set-cookie" not in forwarded_headers
+    assert "x-custom-secret" not in forwarded_headers
+    assert forwarded_headers["anthropic-version"] == "2023-06-01"
+    assert forwarded_headers["x-provider-trace-id"] == "fixture-trace"
+    assert "cookie" not in response.headers
+    assert "set-cookie" not in response.headers
+    assert response.headers["anthropic-version"] == "2023-06-01"
+    assert response.headers["x-provider-trace-id"] == "fixture-trace"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_target_api_key_header_sets_upstream_authorization() -> None:
     settings = Settings(
         target=TargetConfig(
@@ -753,6 +863,141 @@ async def test_responses_to_chat_bridge_rewrites_request_and_response() -> None:
     ]
     assert response.json()["output"][0]["content"][0]["text"] == "ok"
     assert response.json()["usage"]["total_tokens"] == 5
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input_item",
+    [
+        "not-a-mapping",
+        {"type": "unknown_fixture", "content": "must not disappear"},
+        {"type": "message", "role": "user"},
+    ],
+)
+@respx.mock
+async def test_responses_to_chat_bridge_rejects_invalid_input_items(input_item: object) -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+        compat=CompatConfig(responses_to_chat=True),
+    )
+    route = respx.post("https://upstream.example/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            json={"model": "fixture-model", "input": [input_item]},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid Responses input item"
+    assert not route.called
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            "model": "fixture-model",
+            "input": "hello",
+            "tools": [{"type": "web_search"}],
+        },
+        {
+            "model": "fixture-model",
+            "input": "hello",
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {"name": "chat-shaped", "parameters": {"type": "object"}},
+                }
+            ],
+        },
+        {
+            "model": "fixture-model",
+            "input": "hello",
+            "tools": [{"type": "function", "name": "missing_parameters"}],
+        },
+        {
+            "model": "fixture-model",
+            "input": [
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_fixture",
+                    "output": [
+                        {
+                            "type": "input_image",
+                            "image_url": "https://example.test/image.png",
+                        }
+                    ],
+                }
+            ],
+        },
+        {"model": "fixture-model", "instructions": 0, "input": "hello"},
+        {
+            "model": "fixture-model",
+            "input": [{"type": "message", "role": 0, "content": "hello"}],
+        },
+    ],
+)
+@respx.mock
+async def test_responses_to_chat_bridge_rejects_invalid_payload_without_upstream(
+    payload: dict[str, object],
+) -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+        compat=CompatConfig(responses_to_chat=True),
+    )
+    route = respx.post("https://upstream.example/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post("/v1/responses", json=payload)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "invalid Responses input item"
+    assert not route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_proxy_rejects_redacted_mapping_key_collisions() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+    )
+    route = respx.post("https://upstream.example/v1/responses").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/v1/responses",
+            json={
+                OPENAI_FAKE: "first",
+                PROVIDER_FIXTURES["deepseek_api_key"]: "second",
+            },
+        )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "request contains colliding keys after redaction"
+    assert not route.called
 
 
 @pytest.mark.asyncio

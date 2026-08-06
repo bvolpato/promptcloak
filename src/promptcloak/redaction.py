@@ -37,6 +37,10 @@ class RedactionResult:
     stats: RedactionStats
 
 
+class RedactionKeyCollisionError(ValueError):
+    """Raised when distinct mapping keys become identical after redaction."""
+
+
 class SecretRedactor:
     def __init__(self, config: RedactionConfig):
         self.config = config
@@ -90,6 +94,8 @@ class SecretRedactor:
             redacted: dict[Any, Any] = {}
             for key, item in value.items():
                 redacted_key = self._redact_string(key, stats) if isinstance(key, str) else key
+                if redacted_key in redacted:
+                    raise RedactionKeyCollisionError("mapping keys collide after redaction")
                 redacted[redacted_key] = (
                     self._redact_sensitive_field(item, stats, strict=self._is_strict_field(key))
                     if self._is_sensitive_field(key)
@@ -129,6 +135,8 @@ class SecretRedactor:
             redacted: dict[Any, Any] = {}
             for key, item in value.items():
                 redacted_key = self._redact_string(key, stats) if isinstance(key, str) else key
+                if redacted_key in redacted:
+                    raise RedactionKeyCollisionError("mapping keys collide after redaction")
                 redacted[redacted_key] = self._redact_sensitive_field(item, stats, strict=strict)
             return redacted
         if strict and value is not None and not isinstance(value, bool):

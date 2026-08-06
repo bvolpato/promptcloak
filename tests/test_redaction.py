@@ -1,9 +1,10 @@
 import tempfile
 
+import pytest
 import requests
 
 from promptcloak.config import RedactionConfig, RuleConfig
-from promptcloak.redaction import SecretRedactor
+from promptcloak.redaction import RedactionKeyCollisionError, SecretRedactor
 from tests.fixtures import EXPANDED_PROVIDER_FIXTURES, OPENAI_FAKE, PROVIDER_FIXTURES
 
 
@@ -322,6 +323,28 @@ def test_payload_redacts_secret_shaped_mapping_keys() -> None:
 
     assert result.value == {"[REDACTED_SECRET]": "value"}
     assert result.stats.rule_hits["openai_key"] == 1
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {
+            OPENAI_FAKE: "first",
+            PROVIDER_FIXTURES["deepseek_api_key"]: "second",
+        },
+        {
+            "nested": {
+                OPENAI_FAKE: "first",
+                PROVIDER_FIXTURES["deepseek_api_key"]: "second",
+            }
+        },
+    ],
+)
+def test_payload_rejects_redacted_mapping_key_collisions(payload: dict) -> None:
+    redactor = SecretRedactor(RedactionConfig(engine="basic"))
+
+    with pytest.raises(RedactionKeyCollisionError):
+        redactor.redact_payload(payload)
 
 
 def test_explicit_secret_fields_redact_short_and_numeric_values() -> None:

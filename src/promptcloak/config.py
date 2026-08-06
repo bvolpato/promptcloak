@@ -128,6 +128,14 @@ class Settings(BaseModel):
     audit: AuditConfig = Field(default_factory=AuditConfig)
     compat: CompatConfig = Field(default_factory=CompatConfig)
 
+    @model_validator(mode="after")
+    def validate_auth_forwarding(self) -> Settings:
+        if self.server.api_key and self.target.forward_client_authorization:
+            raise ValueError(
+                "proxy authentication cannot be combined with client authorization forwarding"
+            )
+        return self
+
 
 def _deep_update(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
     for key, value in overrides.items():

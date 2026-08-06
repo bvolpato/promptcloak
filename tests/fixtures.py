@@ -87,17 +87,15 @@ def complex_payload() -> dict[str, Any]:
         "tools": [
             {
                 "type": "function",
-                "function": {
-                    "name": "inspect_config",
-                    "description": f"Repo token {PROVIDER_FIXTURES['github_classic_pat']}",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "token": {
-                                "type": "string",
-                                "description": f"custom tail {CUSTOM_TAIL_SECRET}",
-                            }
-                        },
+                "name": "inspect_config",
+                "description": f"Repo token {PROVIDER_FIXTURES['github_classic_pat']}",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "token": {
+                            "type": "string",
+                            "description": f"custom tail {CUSTOM_TAIL_SECRET}",
+                        }
                     },
                 },
             }

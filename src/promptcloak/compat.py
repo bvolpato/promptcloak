@@ -7,14 +7,22 @@ from typing import Any
 from uuid import uuid4
 
 
+class ResponsesInputError(ValueError):
+    """Raised when Responses input cannot be represented as chat messages."""
+
+
 def responses_to_chat_payload(payload: dict[str, Any]) -> dict[str, Any]:
     chat: dict[str, Any] = {
         "model": payload.get("model"),
         "messages": _responses_messages_to_chat(payload),
         "stream": bool(payload.get("stream", False)),
     }
-    if payload.get("tools"):
-        chat["tools"] = _responses_tools_to_chat(payload["tools"])
+    if "tools" in payload:
+        tools = payload["tools"]
+        if not isinstance(tools, list):
+            raise ResponsesInputError("Responses tools must be a list")
+        if tools:
+            chat["tools"] = _responses_tools_to_chat(tools)
     if payload.get("tool_choice") in {"auto", "none", "required"}:
         chat["tool_choice"] = payload["tool_choice"]
     if "parallel_tool_calls" in payload:
@@ -213,36 +221,54 @@ async def _chat_sse_event_to_responses(raw: str, state: _ChatStreamState) -> Asy
 
 def _responses_messages_to_chat(payload: dict[str, Any]) -> list[dict[str, Any]]:
     messages: list[dict[str, Any]] = []
-    if payload.get("instructions"):
-        messages.append({"role": "system", "content": payload["instructions"]})
+    instructions = payload.get("instructions")
+    if instructions is not None and not isinstance(instructions, str):
+        raise ResponsesInputError("Responses instructions must be text")
+    if instructions:
+        messages.append({"role": "system", "content": instructions})
     input_value = payload.get("input")
     if isinstance(input_value, str):
         messages.append({"role": "user", "content": input_value})
     elif isinstance(input_value, list):
+        if not input_value:
+            raise ResponsesInputError("Responses input list cannot be empty")
         for item in input_value:
             messages.extend(_response_item_to_chat_messages(item))
-    if not messages:
-        messages.append({"role": "user", "content": ""})
+    else:
+        raise ResponsesInputError("Responses input must be text or a list")
     return messages
 
 
 def _response_item_to_chat_messages(item: Any) -> list[dict[str, Any]]:
     if not isinstance(item, dict):
-        return []
+        raise ResponsesInputError("Responses input item must be an object")
     kind = item.get("type", "message")
+    if not isinstance(kind, str):
+        raise ResponsesInputError("Responses input item type must be text")
     if kind == "message":
-        role = item.get("role") or "user"
-        return [{"role": role, "content": _content_to_chat(item.get("content"))}]
+        role = item.get("role")
+        if not isinstance(role, str) or not role:
+            raise ResponsesInputError("Responses message role is required")
+        if role not in {"user", "assistant", "system", "developer"}:
+            raise ResponsesInputError("unsupported Responses message role")
+        if "content" not in item:
+            raise ResponsesInputError("Responses message content is required")
+        return [{"role": role, "content": _content_to_chat(item["content"])}]
     if kind in {"function_call", "custom_tool_call"}:
+        call_id = item.get("call_id")
+        if not isinstance(call_id, str) or not call_id:
+            raise ResponsesInputError("Responses tool call requires call_id")
         name = _tool_name(item)
-        arguments = item.get("arguments") or item.get("input") or "{}"
+        arguments = item.get("arguments") if kind == "function_call" else item.get("input")
+        if not isinstance(arguments, str):
+            raise ResponsesInputError("Responses tool call arguments must be text")
         return [
             {
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [
                     {
-                        "id": item.get("call_id") or f"call_{uuid4().hex}",
+                        "id": call_id,
                         "type": "function",
                         "function": {"name": name, "arguments": arguments},
                     }
@@ -250,38 +276,58 @@ def _response_item_to_chat_messages(item: Any) -> list[dict[str, Any]]:
             }
         ]
     if kind in {"function_call_output", "custom_tool_call_output"}:
+        call_id = item.get("call_id")
+        if not isinstance(call_id, str) or not call_id:
+            raise ResponsesInputError("Responses tool output requires call_id")
+        if "output" not in item or item["output"] is None:
+            raise ResponsesInputError("Responses tool output is required")
         return [
             {
                 "role": "tool",
-                "tool_call_id": item.get("call_id"),
-                "content": _output_to_text(item.get("output")),
+                "tool_call_id": call_id,
+                "content": _output_to_text(item["output"]),
             }
         ]
-    return []
+    raise ResponsesInputError("unsupported Responses input item type")
 
 
-def _content_to_chat(content: Any) -> Any:
+def _content_to_chat(content: Any) -> str | list[dict[str, Any]]:
     if isinstance(content, str):
         return content
-    if not isinstance(content, list):
-        return "" if content is None else str(content)
-    parts = []
-    texts = []
+    if not isinstance(content, list) or not content:
+        raise ResponsesInputError("Responses message content must be text or a non-empty list")
+    parts: list[dict[str, Any]] = []
+    texts: list[str] = []
     for item in content:
         if not isinstance(item, dict):
-            texts.append(str(item))
-            continue
+            raise ResponsesInputError("Responses content item must be an object")
+        kind = item.get("type")
         text = item.get("text")
-        if item.get("type") in {"input_text", "output_text", "text"} and text is not None:
-            texts.append(str(text))
-            parts.append({"type": "text", "text": str(text)})
+        if kind in {"input_text", "output_text", "text"}:
+            if not isinstance(text, str):
+                raise ResponsesInputError("Responses text content requires text")
+            texts.append(text)
+            parts.append({"type": "text", "text": text})
             continue
+        if kind not in {"input_image", "image_url"}:
+            raise ResponsesInputError("unsupported Responses content item type")
         image_url = item.get("image_url") or item.get("url")
-        if image_url:
-            image = image_url if isinstance(image_url, dict) else {"url": image_url}
-            if item.get("detail") and "detail" not in image:
-                image = image | {"detail": item["detail"]}
-            parts.append({"type": "image_url", "image_url": image})
+        if isinstance(image_url, str) and image_url:
+            image: dict[str, Any] = {"url": image_url}
+        elif (
+            isinstance(image_url, dict)
+            and isinstance(image_url.get("url"), str)
+            and image_url["url"]
+        ):
+            image = dict(image_url)
+        else:
+            raise ResponsesInputError("Responses image content requires image_url")
+        detail = item.get("detail")
+        if detail is not None and not isinstance(detail, str):
+            raise ResponsesInputError("Responses image detail must be text")
+        if detail and "detail" not in image:
+            image["detail"] = detail
+        parts.append({"type": "image_url", "image_url": image})
     if len(parts) == len(texts):
         return "\n".join(texts)
     return parts or "\n".join(texts)
@@ -290,37 +336,60 @@ def _content_to_chat(content: Any) -> Any:
 def _output_to_text(output: Any) -> str:
     if isinstance(output, str):
         return output
-    if isinstance(output, list):
-        texts = [
-            str(item["text"])
-            for item in output
-            if isinstance(item, dict) and item.get("text") is not None
-        ]
-        return "\n".join(texts) if texts else json.dumps(output, separators=(",", ":"))
-    return "" if output is None else json.dumps(output, separators=(",", ":"))
+    if not isinstance(output, list) or not output:
+        raise ResponsesInputError("Responses tool output must be text or a non-empty text list")
+    texts: list[str] = []
+    for item in output:
+        if not isinstance(item, dict) or item.get("type") != "input_text":
+            raise ResponsesInputError("unsupported Responses tool output content type")
+        text = item.get("text")
+        if not isinstance(text, str):
+            raise ResponsesInputError("Responses tool output text must be text")
+        texts.append(text)
+    return "\n".join(texts)
 
 
 def _responses_tools_to_chat(tools: list[Any]) -> list[dict[str, Any]]:
-    chat_tools = []
+    chat_tools: list[dict[str, Any]] = []
     for tool in tools:
         if not isinstance(tool, dict):
-            continue
-        if tool.get("type") == "function":
+            raise ResponsesInputError("Responses tool must be an object")
+        kind = tool.get("type")
+        if kind == "function":
             chat_tools.append(_function_tool_to_chat(tool))
-        elif tool.get("type") == "namespace":
+        elif kind == "namespace":
             namespace = tool.get("name")
-            for nested in tool.get("tools") or []:
-                if isinstance(nested, dict) and nested.get("type") == "function":
-                    chat_tools.append(_function_tool_to_chat(nested, namespace))
+            if not isinstance(namespace, str) or not namespace:
+                raise ResponsesInputError("Responses tool namespace requires name")
+            nested_tools = tool.get("tools")
+            if not isinstance(nested_tools, list) or not nested_tools:
+                raise ResponsesInputError("Responses tool namespace requires tools")
+            for nested in nested_tools:
+                if not isinstance(nested, dict) or nested.get("type") != "function":
+                    raise ResponsesInputError("Responses namespace supports only function tools")
+                chat_tools.append(_function_tool_to_chat(nested, namespace))
+        else:
+            raise ResponsesInputError("unsupported Responses tool type")
     return chat_tools
 
 
 def _function_tool_to_chat(tool: dict[str, Any], namespace: str | None = None) -> dict[str, Any]:
-    name = tool.get("name") or "tool"
+    name = tool.get("name")
+    if not isinstance(name, str) or not name:
+        raise ResponsesInputError("Responses function tool requires name")
+    description = tool.get("description")
+    if description is not None and not isinstance(description, str):
+        raise ResponsesInputError("Responses function tool description must be text")
+    parameters = tool.get("parameters")
+    if not isinstance(parameters, dict):
+        raise ResponsesInputError("Responses function tool parameters must be an object")
+    strict = tool.get("strict")
+    if strict is not None and not isinstance(strict, bool):
+        raise ResponsesInputError("Responses function tool strict must be boolean")
     function = {
         "name": f"{namespace}__{name}" if namespace else name,
-        "description": tool.get("description") or "",
-        "parameters": tool.get("parameters") or {"type": "object", "properties": {}},
+        "description": description or "",
+        "parameters": parameters,
     }
     if "strict" in tool:
         function["strict"] = tool["strict"]
@@ -404,8 +473,12 @@ def _responses_usage(usage: Any) -> dict[str, Any] | None:
 
 
 def _tool_name(item: dict[str, Any]) -> str:
-    name = item.get("name") or "tool"
+    name = item.get("name")
+    if not isinstance(name, str) or not name:
+        raise ResponsesInputError("Responses tool call requires name")
     namespace = item.get("namespace")
+    if namespace is not None and not isinstance(namespace, str):
+        raise ResponsesInputError("Responses tool namespace must be text")
     return f"{namespace}__{name}" if namespace else name
 
 

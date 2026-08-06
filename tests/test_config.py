@@ -5,6 +5,7 @@ from promptcloak.config import (
     RedactionConfig,
     RuleConfig,
     ServerConfig,
+    Settings,
     TargetConfig,
     load_settings,
 )
@@ -79,3 +80,14 @@ def test_config_root_must_be_a_mapping(tmp_path) -> None:
 def test_server_port_must_be_valid(port: int) -> None:
     with pytest.raises(ValidationError):
         ServerConfig(port=port)
+
+
+def test_proxy_auth_rejects_forwarding_client_authorization() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="proxy authentication cannot be combined with client authorization forwarding",
+    ):
+        Settings(
+            server=ServerConfig(api_key="local-fixture-token"),
+            target=TargetConfig(forward_client_authorization=True),
+        )
