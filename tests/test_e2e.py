@@ -359,3 +359,139 @@ async def test_e2e_responses_to_chat_bridge_redacts_before_translation() -> None
     assert route.calls.last.request.headers["authorization"] == "Bearer upstream-token"
     assert_no_fixture_values(json.loads(route.calls.last.request.content))
     assert response.json()["output"][0]["content"][0]["text"] == "redacted"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_e2e_codex_openrouter_native_responses_uses_dedicated_headers() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://openrouter.ai/api/v1",
+            allowed_base_urls=["https://openrouter.ai/api/v1"],
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="detect-secrets"),
+    )
+    route = respx.post("https://openrouter.ai/api/v1/responses").mock(
+        return_value=httpx.Response(200, json={"id": "resp_fixture", "status": "completed"})
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/v1/responses",
+            headers={
+                "X-Target-Base-URL": "https://openrouter.ai/api/v1",
+                "X-Target-API-Key": "upstream-fixture-token",
+            },
+            json={
+                "model": "openai/gpt-oss-120b",
+                "input": f"OPENAI_API_KEY={OPENAI_FAKE}",
+            },
+        )
+
+    assert response.status_code == 200
+    forwarded = route.calls.last.request
+    assert forwarded.headers["authorization"] == "Bearer upstream-fixture-token"
+    assert_header_absent(forwarded.headers, "x-target-base-url")
+    assert_header_absent(forwarded.headers, "x-target-api-key")
+    payload = json.loads(forwarded.content)
+    assert payload["model"] == "openai/gpt-oss-120b"
+    assert payload["input"] == "OPENAI_API_KEY=[REDACTED_SECRET]"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_e2e_opencode_chat_completions_uses_dedicated_headers() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://compatible.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="detect-secrets"),
+    )
+    route = respx.post("https://compatible.example/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl_fixture",
+                "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+            },
+        )
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/v1/chat/completions",
+            headers={
+                "X-Target-Base-URL": "https://compatible.example/v1",
+                "X-Target-API-Key": "upstream-fixture-token",
+            },
+            json={
+                "model": "provider/model-fixture",
+                "messages": [{"role": "user", "content": f"key={GEMINI_FAKE}"}],
+            },
+        )
+
+    assert response.status_code == 200
+    forwarded = route.calls.last.request
+    assert forwarded.headers["authorization"] == "Bearer upstream-fixture-token"
+    assert_no_fixture_values(json.loads(forwarded.content))
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_e2e_documented_echo_request_redacts_before_forwarding() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://echo.example",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="detect-secrets"),
+    )
+    route = respx.post("https://echo.example/post").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        response = await client.post(
+            "/post",
+            headers={"X-Target-Base-URL": "https://echo.example"},
+            json={"messages": [{"content": f"GEMINI_API_KEY={GEMINI_FAKE}"}]},
+        )
+
+    assert response.status_code == 200
+    assert json.loads(route.calls.last.request.content) == {
+        "messages": [{"content": "GEMINI_API_KEY=[REDACTED_SECRET]"}]
+    }
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_e2e_legacy_completions_and_models_routes_are_forwarded() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://compatible.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="detect-secrets"),
+    )
+    completions_route = respx.post("https://compatible.example/v1/completions").mock(
+        return_value=httpx.Response(200, json={"choices": [{"text": "ok"}]})
+    )
+    models_route = respx.get("https://compatible.example/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+
+    async with httpx.AsyncClient(transport=_transport(settings), base_url="http://proxy") as client:
+        completions_response = await client.post(
+            "/v1/completions",
+            json={"model": "model-fixture", "prompt": f"OPENAI_API_KEY={OPENAI_FAKE}"},
+        )
+        models_response = await client.get("/v1/models")
+
+    assert completions_response.status_code == 200
+    assert models_response.status_code == 200
+    assert json.loads(completions_route.calls.last.request.content)["prompt"] == (
+        "OPENAI_API_KEY=[REDACTED_SECRET]"
+    )
+    assert models_route.called

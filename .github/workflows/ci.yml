@@ -46,5 +46,6 @@ jobs:
       - run: uv build
       - run: helm lint ./charts/promptcloak
       - run: helm template promptcloak ./charts/promptcloak >/dev/null
+      - run: uv run scripts/check_helm.py
       - run: docker build -t promptcloak:ci .
       - run: docker run --rm --entrypoint promptcloak promptcloak:ci version

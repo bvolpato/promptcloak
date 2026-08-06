@@ -14,6 +14,7 @@ uv run pip-audit
 uv build
 helm lint ./charts/promptcloak
 helm template promptcloak ./charts/promptcloak >/dev/null
+uv run scripts/check_helm.py
 docker build -t promptcloak:release-check .
 docker run --rm --entrypoint promptcloak promptcloak:release-check version
 ```

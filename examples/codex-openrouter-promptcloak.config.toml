@@ -5,7 +5,8 @@ model_reasoning_effort = "high"
 [model_providers.promptcloak-openrouter]
 name = "PromptCloak OpenRouter"
 base_url = "http://127.0.0.1:8000/v1"
-env_key = "OPENROUTER_API_KEY"
 wire_api = "responses"
+env_http_headers = { "X-Target-API-Key" = "OPENROUTER_API_KEY" }
+http_headers = { "X-Target-Base-URL" = "https://openrouter.ai/api/v1" }
 request_max_retries = 0
 stream_max_retries = 0

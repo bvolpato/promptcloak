@@ -68,6 +68,8 @@ jobs:
       - run: uv run pytest
       - run: uv build
       - run: helm lint ./charts/promptcloak
+      - run: helm template promptcloak ./charts/promptcloak >/dev/null
+      - run: uv run scripts/check_helm.py
       - run: helm package charts/promptcloak --destination dist
       - run: cd dist && sha256sum -- ./*.whl ./*.tar.gz ./*.tgz > SHA256SUMS
       - uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1

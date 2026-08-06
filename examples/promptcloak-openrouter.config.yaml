@@ -7,7 +7,7 @@ target:
   default_base_url: https://openrouter.ai/api/v1
   api_key: null
   api_key_header: authorization
-  forward_client_authorization: true
+  forward_client_authorization: false
   timeout_seconds: 180
   allowed_base_urls:
     - https://openrouter.ai/api/v1
@@ -30,4 +30,4 @@ audit:
   file: null
 
 compat:
-  responses_to_chat: true
+  responses_to_chat: false

@@ -128,10 +128,10 @@ promptcloak init --target-base-url https://api.openai.com/v1
 export OPENAI_API_KEY="&lt;openai-upstream-key&gt;"
 promptcloak serve</code></pre>
           <pre><code>uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
 promptcloak doctor</code></pre>
           <pre><code>uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl</code></pre>
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl</code></pre>
         </div>
       </section>
 
@@ -150,7 +150,10 @@ promptcloak doctor</code></pre>
             <h3>OpenAI default</h3>
             <pre><code>curl http://127.0.0.1:8000/v1/responses \
   -H "X-Target-Base-URL: https://api.openai.com/v1" \
-  -H "X-Target-API-Key: $OPENAI_API_KEY"</code></pre>
+  -H "X-Target-API-Key: $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5.5","input":"Reply exactly: ok"}' \
+  | jq -r '.output[0].content[0].text'</code></pre>
           </article>
           <article>
             <h3>Config default</h3>
@@ -169,16 +172,21 @@ target:
   allowed_base_urls:
     - https://openrouter.ai/api/v1
 
-curl http://127.0.0.1:8000/v1/chat/completions \
+curl http://127.0.0.1:8000/v1/responses \
   -H "X-Target-Base-URL: https://openrouter.ai/api/v1" \
-  -H "X-Target-API-Key: $OPENROUTER_API_KEY"</code></pre>
+  -H "X-Target-API-Key: $OPENROUTER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-oss-120b","input":"Reply exactly: ok"}'</code></pre>
           </article>
           <article>
             <h3>Anthropic-compatible</h3>
             <pre><code>curl http://127.0.0.1:8000/v1/messages \
   -H "X-Target-Base-URL: https://api.anthropic.com" \
   -H "X-Target-API-Key: $ANTHROPIC_API_KEY" \
-  -H "X-Target-API-Key-Header: x-api-key"</code></pre>
+  -H "X-Target-API-Key-Header: x-api-key" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"claude-opus-4-8","max_tokens":64,"messages":[{"role":"user","content":"Reply exactly: ok"}]}'</code></pre>
           </article>
           <article>
             <h3>Local Ollama/vLLM</h3>
@@ -281,49 +289,67 @@ llm.chat(redact_messages(messages))</code></pre>
         <div class="agent-grid">
           <article>
             <h3>Codex</h3>
-            <pre><code># ~/.config/promptcloak/config.yaml
-target:
-  forward_client_authorization: true
-
-compat:
-  responses_to_chat: true
-
-# ~/.codex/openrouter-promptcloak.config.toml
-model = "openai/gpt-oss-120b"
+            <pre><code>model = "openai/gpt-oss-120b"
 model_provider = "promptcloak-openrouter"
 
 [model_providers.promptcloak-openrouter]
 name = "PromptCloak OpenRouter"
 base_url = "http://127.0.0.1:8000/v1"
-env_key = "OPENROUTER_API_KEY"
 wire_api = "responses"
-request_max_retries = 0
-stream_max_retries = 0
+env_http_headers = { "X-Target-API-Key" = "OPENROUTER_API_KEY" }
+http_headers = { "X-Target-Base-URL" = "https://openrouter.ai/api/v1" }
 
-# PromptCloak forwards localhost auth and bridges Responses to Chat.</code></pre>
+# ~/.codex/openrouter-promptcloak.config.toml
+# codex -p openrouter-promptcloak</code></pre>
+            <pre><code>cp examples/promptcloak-openrouter.config.yaml \
+  ~/.config/promptcloak/config.yaml
+cp examples/codex-openrouter-promptcloak.config.toml \
+  ~/.codex/openrouter-promptcloak.config.toml
+export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+promptcloak serve
+codex -p openrouter-promptcloak</code></pre>
           </article>
           <article>
             <h3>OpenCode</h3>
             <pre><code>{
+  "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "promptcloak": {
+    "promptcloak-openrouter": {
       "npm": "@ai-sdk/openai-compatible",
+      "name": "PromptCloak OpenRouter",
       "options": {
         "baseURL": "http://127.0.0.1:8000/v1",
         "headers": {
-          "X-Target-Base-URL": "https://api.openai.com/v1",
-          "X-Target-API-Key": "{env:OPENAI_API_KEY}"
+          "X-Target-Base-URL": "https://openrouter.ai/api/v1",
+          "X-Target-API-Key": "{env:OPENROUTER_API_KEY}"
+        }
+      },
+      "models": {
+        "openai/gpt-oss-120b": {
+          "name": "gpt-oss via PromptCloak"
         }
       }
     }
-  }
+  },
+  "model": "promptcloak-openrouter/openai/gpt-oss-120b"
 }</code></pre>
+            <pre><code>export OPENROUTER_API_KEY="&lt;openrouter-upstream-key&gt;"
+opencode run \
+  -m promptcloak-openrouter/openai/gpt-oss-120b \
+  "Reply with exactly: promptcloak-opencode-ok"</code></pre>
           </article>
           <article>
             <h3>Claude Code</h3>
-            <pre><code>export ANTHROPIC_BASE_URL="http://127.0.0.1:8000"
-export ANTHROPIC_API_KEY="${PROMPTCLOAK_LOCAL_API_KEY:-placeholder}"
-export DISABLE_TELEMETRY=1</code></pre>
+            <pre><code>export PROMPTCLOAK_TARGET_BASE_URL="https://api.anthropic.com"
+export PROMPTCLOAK_TARGET_API_KEY="$ANTHROPIC_UPSTREAM_API_KEY"
+export PROMPTCLOAK_TARGET_API_KEY_HEADER="x-api-key"
+export PROMPTCLOAK_SERVER_API_KEY="&lt;local-proxy-key&gt;"
+promptcloak serve
+
+export ANTHROPIC_BASE_URL="http://127.0.0.1:8000"
+export ANTHROPIC_AUTH_TOKEN="$PROMPTCLOAK_SERVER_API_KEY"
+export DISABLE_TELEMETRY=1
+claude</code></pre>
           </article>
         </div>
       </section>
@@ -338,7 +364,7 @@ export DISABLE_TELEMETRY=1</code></pre>
           </p>
         </div>
         <ul>
-          <li>Provider auth headers still need to reach the provider when used for authentication.</li>
+          <li>Provider auth is added from config or dedicated target headers after client header filtering.</li>
           <li>Unknown private token formats need a custom exact-tail or regex rule.</li>
           <li>Provider responses pass through without scanning or redaction.</li>
           <li><code>--debug-requests</code> can print raw local request bodies. Use fixture data only.</li>
@@ -358,21 +384,24 @@ export DISABLE_TELEMETRY=1</code></pre>
             <h3>Docker</h3>
             <pre><code>docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.8
+  --env-file "$HOME/.config/promptcloak/provider.env" \
+  ghcr.io/bvolpato/promptcloak:0.1.9
 
-curl -fsS http://127.0.0.1:8000/healthz</code></pre>
+curl --retry 10 --retry-connrefused --retry-delay 1 \
+  -fsS http://127.0.0.1:8000/healthz</code></pre>
           </article>
           <article>
             <h3>Helm</h3>
-            <pre><code>helm install promptcloak \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8.tgz \
+            <pre><code>kubectl create secret generic promptcloak-env \
+  --from-env-file="$HOME/.config/promptcloak/kubernetes.env"
+
+helm install promptcloak \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
+  --set existingSecret=promptcloak-env
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
-export PROMPTCLOAK_SERVER_API_KEY="$(kubectl get secret promptcloak-secret \
+export PROMPTCLOAK_SERVER_API_KEY="$(kubectl get secret promptcloak-env \
   -o jsonpath='{.data.PROMPTCLOAK_SERVER_API_KEY}' | base64 --decode)"
 kubectl port-forward svc/promptcloak 8000:8000
 curl -fsS http://127.0.0.1:8000/healthz</code></pre>

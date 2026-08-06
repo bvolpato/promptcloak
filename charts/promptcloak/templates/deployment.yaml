@@ -25,18 +25,24 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - containerPort: 8000
+          {{- if .Values.existingSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret | quote }}
+          {{- end }}
           env:
             {{- if .Values.serverAuth.enabled }}
             - name: PROMPTCLOAK_SERVER_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "promptcloak.fullname" . }}-secret
+                  name: {{ include "promptcloak.secretName" . | quote }}
                   key: PROMPTCLOAK_SERVER_API_KEY
             {{- end }}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
+            {{- if not .Values.existingSecret }}
             {{- range $key, $value := .Values.secretEnv }}
             {{- if or (ne $key "PROMPTCLOAK_SERVER_API_KEY") (not $.Values.serverAuth.enabled) }}
             - name: {{ $key }}
@@ -44,6 +50,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "promptcloak.fullname" $ }}-secret
                   key: {{ $key }}
+            {{- end }}
             {{- end }}
             {{- end }}
           readinessProbe:

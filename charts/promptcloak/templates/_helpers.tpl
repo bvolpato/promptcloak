@@ -10,13 +10,21 @@ promptcloak
 {{- end -}}
 {{- end -}}
 
+{{- define "promptcloak.secretName" -}}
+{{- if .Values.existingSecret -}}
+{{ .Values.existingSecret }}
+{{- else -}}
+{{ include "promptcloak.fullname" . }}-secret
+{{- end -}}
+{{- end -}}
+
 {{- define "promptcloak.serverApiKey" -}}
 {{- if .Values.serverAuth.apiKey -}}
 {{- .Values.serverAuth.apiKey -}}
 {{- else if hasKey .Values.secretEnv "PROMPTCLOAK_SERVER_API_KEY" -}}
 {{- index .Values.secretEnv "PROMPTCLOAK_SERVER_API_KEY" -}}
 {{- else -}}
-{{- $secretName := printf "%s-secret" (include "promptcloak.fullname" .) -}}
+{{- $secretName := include "promptcloak.secretName" . -}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace $secretName -}}
 {{- if and $existing (hasKey $existing.data "PROMPTCLOAK_SERVER_API_KEY") -}}
 {{- index $existing.data "PROMPTCLOAK_SERVER_API_KEY" | b64dec -}}

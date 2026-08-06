@@ -37,6 +37,38 @@ def read_chart_value(name: str) -> str:
     return match.group(1)
 
 
+def read_values_image_tag() -> str:
+    text = (ROOT / "charts" / "promptcloak" / "values.yaml").read_text(encoding="utf-8")
+    match = re.search(r'^\s+tag:\s*"?([^"\n]+)"?$', text, re.MULTILINE)
+    if not match:
+        raise ValueError("charts/promptcloak/values.yaml missing image tag")
+    return match.group(1)
+
+
+def read_lock_version() -> str:
+    data = tomllib.loads((ROOT / "uv.lock").read_text(encoding="utf-8"))
+    for package in data.get("package", []):
+        if package.get("name") == "promptcloak":
+            return str(package["version"])
+    raise ValueError("uv.lock missing promptcloak package")
+
+
+def required_release_references(version: str) -> dict[str, tuple[Path, str]]:
+    wheel = f"releases/download/v{version}/promptcloak-{version}-py3-none-any.whl"
+    chart = f"releases/download/v{version}/promptcloak-{version}.tgz"
+    image = f"ghcr.io/bvolpato/promptcloak:{version}"
+    return {
+        "README wheel": (ROOT / "README.md", wheel),
+        "README Helm chart": (ROOT / "README.md", chart),
+        "README container": (ROOT / "README.md", image),
+        "PROMPT wheel": (ROOT / "PROMPT.md", wheel),
+        "PROMPT container": (ROOT / "PROMPT.md", image),
+        "site wheel": (ROOT / "site" / "index.html", wheel),
+        "site Helm chart": (ROOT / "site" / "index.html", chart),
+        "site container": (ROOT / "site" / "index.html", image),
+    }
+
+
 def tag_version(tag: str | None) -> str | None:
     if not tag:
         return None
@@ -63,6 +95,8 @@ def main() -> None:
         "src/promptcloak/version.py": read_package_version(),
         "charts/promptcloak/Chart.yaml version": read_chart_value("version"),
         "charts/promptcloak/Chart.yaml appVersion": read_chart_value("appVersion"),
+        "charts/promptcloak/values.yaml image tag": read_values_image_tag(),
+        "uv.lock": read_lock_version(),
     }
 
     if not SEMVER.fullmatch(expected):
@@ -73,6 +107,14 @@ def main() -> None:
     ]
     if mismatches:
         raise SystemExit("release version mismatch: " + ", ".join(mismatches))
+
+    missing_references = [
+        name
+        for name, (path, value) in required_release_references(expected).items()
+        if value not in path.read_text(encoding="utf-8")
+    ]
+    if missing_references:
+        raise SystemExit("release references missing: " + ", ".join(missing_references))
 
     print(f"release check: {expected}")
 

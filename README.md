@@ -42,7 +42,8 @@ Entropy-only matching is disabled to avoid unpredictable false positives.
 
 - Request bodies and query parameters are scanned before they leave your machine.
 - Audit logs record redaction counts and rule names without storing secret values.
-- Upstream auth headers still have to reach the provider when used for authentication.
+- PromptCloak strips cookies and secret-named client headers. Provider credentials are
+  added from config or dedicated `X-Target-*` headers after that filtering step.
 - Unknown private token formats need a custom exact-tail or regex rule.
 
 See [SECURITY.md](SECURITY.md) for deployment defaults and remaining limits.
@@ -61,7 +62,7 @@ uv:
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
 promptcloak doctor
 ```
 
@@ -141,7 +142,7 @@ app.
 
 ```bash
 uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
 ```
 
 ```python
@@ -370,9 +371,9 @@ curl http://127.0.0.1:8000/v1/responses \
 
 Set `X-Target-API-Key-Header: x-api-key` for Anthropic-style upstream authentication.
 
-Configured target keys are bound to `target.default_base_url`. A request that changes
-`X-Target-Base-URL` must also provide its matching `X-Target-API-Key` or
-`X-Target-Authorization`.
+Configured target keys are bound to `target.default_base_url`. A dynamic target that
+requires authentication must receive its key through `X-Target-API-Key` or
+`X-Target-Authorization`; PromptCloak never reuses configured key for another host.
 
 An empty `target.allowed_base_urls` permits any public target. Add URLs to restrict
 dynamic routing. Set `block_private_targets: false` only for trusted local targets.
@@ -385,7 +386,7 @@ PromptCloak forwards routes without reshaping provider payloads.
 | Target | Base URL | Auth header | Notes |
 | --- | --- | --- | --- |
 | OpenAI | `https://api.openai.com/v1` | `authorization` | Native Chat Completions, Responses API, models, tools, streaming. |
-| OpenRouter | `https://openrouter.ai/api/v1` | `authorization` | OpenAI-compatible gateway. Use provider-prefixed model names. |
+| OpenRouter | `https://openrouter.ai/api/v1` | `authorization` | Native Chat Completions and Responses. Use provider-prefixed model names. |
 | Anthropic / Claude-compatible | `https://api.anthropic.com` | `x-api-key` | Forward `/v1/messages`; PromptCloak does not translate OpenAI JSON into Anthropic JSON. |
 | Local Ollama or vLLM | `http://127.0.0.1:11434/v1` or another local `/v1` endpoint | provider-specific | Set `block_private_targets: false` only for local-only configs. |
 
@@ -428,41 +429,33 @@ target:
   block_private_targets: false
 ```
 
-## Codex
+## Codex with OpenRouter
 
-Codex uses OpenAI Responses. For gateways that only expose Chat Completions, set
-`compat.responses_to_chat: true`. PromptCloak redacts request content before
-translating it.
+OpenRouter accepts native Responses requests, so no compatibility bridge is needed.
+Keep OpenRouter key in environment and send it through PromptCloak's dedicated target
+header. Generic client `Authorization` is not forwarded.
 
-This OpenRouter profile keeps key in `OPENROUTER_API_KEY`. Codex sends it to local
-proxy, which forwards it only to allowed OpenRouter target.
-
-PromptCloak config:
+Start PromptCloak:
 
 ```bash
 mkdir -p ~/.config/promptcloak
 cp examples/promptcloak-openrouter.config.yaml ~/.config/promptcloak/config.yaml
 export OPENROUTER_API_KEY="<openrouter-upstream-key>"
-uv run promptcloak serve
+promptcloak serve
 ```
 
-Relevant PromptCloak settings:
+The checked-in PromptCloak config restricts dynamic routing to OpenRouter and leaves
+`forward_client_authorization` and `responses_to_chat` disabled.
 
-```yaml
-target:
-  default_base_url: https://openrouter.ai/api/v1
-  api_key: null
-  forward_client_authorization: true
-  allowed_base_urls:
-    - https://openrouter.ai/api/v1
+Install Codex profile:
 
-compat:
-  responses_to_chat: true
+```bash
+mkdir -p ~/.codex
+cp examples/codex-openrouter-promptcloak.config.toml \
+  ~/.codex/openrouter-promptcloak.config.toml
 ```
 
-Codex profile:
-
-`~/.codex/config.toml`
+Profile contents:
 
 ```toml
 model = "openai/gpt-oss-120b"
@@ -471,118 +464,102 @@ model_provider = "promptcloak-openrouter"
 [model_providers.promptcloak-openrouter]
 name = "PromptCloak OpenRouter"
 base_url = "http://127.0.0.1:8000/v1"
-env_key = "OPENROUTER_API_KEY"
 wire_api = "responses"
+env_http_headers = { "X-Target-API-Key" = "OPENROUTER_API_KEY" }
+http_headers = { "X-Target-Base-URL" = "https://openrouter.ai/api/v1" }
 request_max_retries = 0
 stream_max_retries = 0
 ```
 
-Or keep it as a separate profile:
+Run interactive Codex:
 
 ```bash
-mkdir -p ~/.codex
-cp examples/codex-openrouter-promptcloak.config.toml ~/.codex/openrouter-promptcloak.config.toml
 codex -p openrouter-promptcloak
 ```
 
-Smoke test:
+Non-interactive smoke test:
 
 ```bash
-codex -p openrouter-promptcloak --sandbox read-only --ask-for-approval never exec \
-  --cd /home/bruno/githubworkspace/promptcloak \
+codex exec -p openrouter-promptcloak --strict-config \
+  --sandbox read-only --ephemeral --cd "$PWD" \
   "Reply with exactly: promptcloak-openrouter-ok"
 ```
 
-Confirm Chat Completions separately:
-
-```bash
-curl -fsS http://127.0.0.1:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"openai/gpt-oss-120b","messages":[{"role":"user","content":"Reply exactly: ok"}]}' \
-  | jq -r '.choices[0].message.content'
-```
-
-Use any OpenRouter model by changing the profile `model`. Add `server.api_key` only if you bind PromptCloak beyond localhost.
-
-Bridge notes:
-
-- Do not put raw keys in TOML. Put the env var name in `env_key`.
-- Keep `target.allowed_base_urls` tight when forwarding client auth.
-- Text responses and standard function calls are translated.
-- PromptCloak redacts before translation.
-- Leave `compat.responses_to_chat` off for upstreams with native `/v1/responses`.
+Use any OpenRouter Responses-capable model by changing profile `model`. For an older
+gateway that only supports Chat Completions, enable `compat.responses_to_chat`; text
+and standard function calls are translated after redaction.
 
 ## OpenCode
 
-OpenCode supports custom OpenAI-compatible providers through `@ai-sdk/openai-compatible` and `options.baseURL`.
-
-Set upstream on PromptCloak:
+Current stable OpenCode config supports custom Chat Completions providers through
+`@ai-sdk/openai-compatible`. Copy checked-in example into project, or merge provider
+block into existing `opencode.json`:
 
 ```bash
-export PROMPTCLOAK_TARGET_BASE_URL="https://api.openai.com/v1"
-export PROMPTCLOAK_TARGET_API_KEY="<openai-upstream-key>"
-promptcloak serve
+cp examples/opencode-openrouter-promptcloak.json opencode.json
+export OPENROUTER_API_KEY="<openrouter-upstream-key>"
 ```
-
-Or set it per request in OpenCode:
-
-`opencode.json`
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "promptcloak": {
+    "promptcloak-openrouter": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "PromptCloak",
+      "name": "PromptCloak OpenRouter",
       "options": {
         "baseURL": "http://127.0.0.1:8000/v1",
         "headers": {
-          "X-Target-Base-URL": "https://api.openai.com/v1",
-          "X-Target-API-Key": "{env:OPENAI_API_KEY}"
+          "X-Target-Base-URL": "https://openrouter.ai/api/v1",
+          "X-Target-API-Key": "{env:OPENROUTER_API_KEY}"
         }
       },
       "models": {
-        "gpt-5.5": {
-          "name": "GPT-5.5 via PromptCloak"
+        "openai/gpt-oss-120b": {
+          "name": "gpt-oss via PromptCloak"
         }
       }
     }
   },
-  "model": "promptcloak/gpt-5.5"
+  "model": "promptcloak-openrouter/openai/gpt-oss-120b"
 }
 ```
 
-Use `X-Target-Base-URL` and `X-Target-API-Key` for per-request routing. Use
-`PROMPTCLOAK_TARGET_BASE_URL` and `PROMPTCLOAK_TARGET_API_KEY` when PromptCloak
-owns upstream config.
+Run:
+
+```bash
+opencode run -m promptcloak-openrouter/openai/gpt-oss-120b \
+  --format json --dir "$PWD" \
+  "Reply with exactly: promptcloak-opencode-ok"
+```
+
+For another Chat Completions target, replace base URL, environment variable, and
+model ID. Use `PROMPTCLOAK_TARGET_BASE_URL` and `PROMPTCLOAK_TARGET_API_KEY` instead
+when PromptCloak owns one fixed upstream.
 
 ## Claude Code
 
-Claude Code sends Anthropic Messages requests. PromptCloak redacts and forwards them to Anthropic-compatible providers and gateways.
-
-Config:
-
-```yaml
-target:
-  default_base_url: https://api.anthropic.com
-  api_key: ${ANTHROPIC_UPSTREAM_API_KEY}
-  api_key_header: x-api-key
-```
-
-Shell:
+Claude Code sends Anthropic Messages requests. Configure provider key on PromptCloak,
+then use separate local bearer token for proxy authentication:
 
 ```bash
 export ANTHROPIC_UPSTREAM_API_KEY="<anthropic-upstream-key>"
+export PROMPTCLOAK_TARGET_BASE_URL="https://api.anthropic.com"
+export PROMPTCLOAK_TARGET_API_KEY="$ANTHROPIC_UPSTREAM_API_KEY"
+export PROMPTCLOAK_TARGET_API_KEY_HEADER="x-api-key"
+export PROMPTCLOAK_SERVER_API_KEY="<local-proxy-key>"
+
+promptcloak serve
+
 export ANTHROPIC_BASE_URL="http://127.0.0.1:8000"
-export ANTHROPIC_API_KEY="${PROMPTCLOAK_LOCAL_API_KEY:-placeholder}"
+export ANTHROPIC_AUTH_TOKEN="$PROMPTCLOAK_SERVER_API_KEY"
 export DISABLE_TELEMETRY=1
 export DO_NOT_TRACK=1
-promptcloak serve
 claude
 ```
 
-PromptCloak forwards `/v1/messages` to configured upstream. It does not translate OpenAI protocol into Anthropic protocol.
+PromptCloak validates local bearer token, removes it, then adds upstream `x-api-key`.
+It forwards `/v1/messages` without translating between OpenAI and Anthropic schemas.
 
 ## Redaction engine
 
@@ -630,15 +607,19 @@ export PROMPTCLOAK_CONFIG_KEY="base64-url-safe-32-byte-key"
 Published image:
 
 ```bash
-export OPENAI_API_KEY="<openai-upstream-key>"
+# ~/.config/promptcloak/provider.env, mode 0600
+PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1
+PROMPTCLOAK_TARGET_API_KEY=<openai-upstream-key>
+```
 
+```bash
 docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
-  -e PROMPTCLOAK_TARGET_BASE_URL=https://api.openai.com/v1 \
-  -e PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY" \
-  ghcr.io/bvolpato/promptcloak:0.1.8
+  --env-file "$HOME/.config/promptcloak/provider.env" \
+  ghcr.io/bvolpato/promptcloak:0.1.9
 
-curl -fsS http://127.0.0.1:8000/healthz
+curl --retry 10 --retry-connrefused --retry-delay 1 \
+  -fsS http://127.0.0.1:8000/healthz
 docker stop promptcloak
 ```
 
@@ -660,13 +641,16 @@ docker compose up --build
 Local chart:
 
 ```bash
+kubectl create secret generic promptcloak-env \
+  --from-env-file="$HOME/.config/promptcloak/kubernetes.env"
+
 helm install promptcloak ./charts/promptcloak \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
+  --set existingSecret=promptcloak-env
 
 kubectl wait deployment/promptcloak --for=condition=Available --timeout=90s
 export PROMPTCLOAK_SERVER_API_KEY="$(
-  kubectl get secret promptcloak-secret \
+  kubectl get secret promptcloak-env \
     -o jsonpath='{.data.PROMPTCLOAK_SERVER_API_KEY}' | base64 --decode
 )"
 kubectl port-forward svc/promptcloak 8000:8000
@@ -682,16 +666,17 @@ helm uninstall promptcloak
 Release asset:
 
 ```bash
-helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.8/promptcloak-0.1.8.tgz
-helm install promptcloak ./promptcloak-0.1.8.tgz \
+helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9.tgz
+helm install promptcloak ./promptcloak-0.1.9.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
-  --set secretEnv.PROMPTCLOAK_TARGET_API_KEY="$OPENAI_API_KEY"
+  --set existingSecret=promptcloak-env
 ```
 
-Helm enables proxy authentication and generates a key by default. Pass
-`--set-string serverAuth.apiKey="$PROMPTCLOAK_SERVER_API_KEY"` to choose it. Send
-`Authorization: Bearer $PROMPTCLOAK_SERVER_API_KEY` on proxied requests. Health probes remain
-unauthenticated.
+`kubernetes.env` must contain `PROMPTCLOAK_TARGET_API_KEY` and
+`PROMPTCLOAK_SERVER_API_KEY`; keep file outside repository with mode `0600`.
+Without `existingSecret`, chart generates proxy key and stores `secretEnv` values in
+chart-managed Secret. Send `Authorization: Bearer $PROMPTCLOAK_SERVER_API_KEY` on
+proxied requests. Health probes remain unauthenticated.
 
 ## Emergency request tracing
 
