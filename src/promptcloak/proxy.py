@@ -144,6 +144,7 @@ async def forward_request(request: Request, path: str) -> Response:
         try:
             chat_payload = responses_to_chat_payload(json_payload)
         except ResponsesInputError:
+            _debug_request(request, path, target_url, body, content, stats, settings)
             raise HTTPException(status_code=400, detail="invalid Responses input item") from None
         content = json.dumps(chat_payload, separators=(",", ":")).encode("utf-8")
 
@@ -464,6 +465,7 @@ def _forward_headers(request: Request, settings: Settings) -> dict[str, str]:
         if lowered.startswith("x-redact-"):
             continue
         headers[key] = value
+    headers["accept-encoding"] = request.headers.get("accept-encoding", "identity")
     if target_api_key:
         _set_target_api_key(headers, target_api_key, target_api_key_header)
     elif target_authorization:

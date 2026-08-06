@@ -47,6 +47,28 @@ async def test_proxy_redacts_and_forwards_json() -> None:
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_proxy_does_not_request_encoding_absent_from_client() -> None:
+    settings = Settings(
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1", block_private_targets=False
+        )
+    )
+    route = respx.get("https://upstream.example/v1/models").mock(
+        return_value=httpx.Response(200, json={"data": []})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        request = client.build_request("GET", "/v1/models")
+        del request.headers["accept-encoding"]
+        response = await client.send(request)
+
+    assert response.status_code == 200
+    assert route.calls.last.request.headers["accept-encoding"] == "identity"
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_proxy_redacts_query_parameters_and_preserves_duplicates() -> None:
     settings = Settings(
         target=TargetConfig(
@@ -898,6 +920,52 @@ async def test_responses_to_chat_bridge_rejects_invalid_input_items(input_item: 
     assert response.status_code == 400
     assert response.json()["detail"] == "invalid Responses input item"
     assert not route.called
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_debug_requests_trace_rejected_responses_bridge_payload(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = Settings(
+        server=ServerConfig(debug_requests=True),
+        target=TargetConfig(
+            default_base_url="https://upstream.example/v1",
+            block_private_targets=False,
+        ),
+        redaction=RedactionConfig(engine="basic"),
+        compat=CompatConfig(responses_to_chat=True),
+    )
+    route = respx.post("https://upstream.example/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={"ok": True})
+    )
+    transport = httpx.ASGITransport(app=create_app(settings))
+
+    with caplog.at_level(logging.WARNING, logger="promptcloak"):
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/v1/responses",
+                json={
+                    "model": "fixture-model",
+                    "input": [
+                        {
+                            "type": "unsupported_fixture",
+                            "content": f"OPENAI_API_KEY={OPENAI_FAKE}",
+                        }
+                    ],
+                },
+            )
+
+    assert response.status_code == 400
+    assert not route.called
+    events = [
+        json.loads(record.message)
+        for record in caplog.records
+        if '"event": "debug_request"' in record.message
+    ]
+    assert len(events) == 1
+    assert OPENAI_FAKE in events[0]["raw_body"]
+    assert OPENAI_FAKE not in events[0]["redacted_body"]
 
 
 @pytest.mark.asyncio
