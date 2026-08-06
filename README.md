@@ -485,9 +485,10 @@ codex exec -p openrouter-promptcloak --strict-config \
   "Reply with exactly: promptcloak-openrouter-ok"
 ```
 
-Use any OpenRouter Responses-capable model by changing profile `model`. For an older
-gateway that only supports Chat Completions, enable `compat.responses_to_chat`; text
-and standard function calls are translated after redaction.
+Use any OpenRouter Responses-capable model by changing profile `model`. Current Codex
+requests include Responses-only custom tool descriptors, so Codex needs a backend with
+native Responses support. `compat.responses_to_chat` remains available for simpler
+Responses clients limited to text, messages, and standard function tools.
 
 ## OpenCode
 
