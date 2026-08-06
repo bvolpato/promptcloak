@@ -128,10 +128,10 @@ promptcloak init --target-base-url https://api.openai.com/v1
 export OPENAI_API_KEY="&lt;openai-upstream-key&gt;"
 promptcloak serve</code></pre>
           <pre><code>uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl
 promptcloak doctor</code></pre>
           <pre><code>uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl</code></pre>
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl</code></pre>
         </div>
       </section>
 
@@ -385,7 +385,7 @@ claude</code></pre>
             <pre><code>docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
   --env-file "$HOME/.config/promptcloak/provider.env" \
-  ghcr.io/bvolpato/promptcloak:0.1.9
+  ghcr.io/bvolpato/promptcloak:0.1.10
 
 curl --retry 10 --retry-connrefused --retry-delay 1 \
   -fsS http://127.0.0.1:8000/healthz</code></pre>
@@ -396,7 +396,7 @@ curl --retry 10 --retry-connrefused --retry-delay 1 \
   --from-env-file="$HOME/.config/promptcloak/kubernetes.env"
 
 helm install promptcloak \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9.tgz \
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
   --set existingSecret=promptcloak-env
 

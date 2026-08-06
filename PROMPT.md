@@ -30,16 +30,16 @@ uv tool:
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl
 promptcloak version
 ```
 
 Docker:
 
 ```bash
-docker pull ghcr.io/bvolpato/promptcloak:0.1.9
+docker pull ghcr.io/bvolpato/promptcloak:0.1.10
 docker run --rm --entrypoint promptcloak \
-  ghcr.io/bvolpato/promptcloak:0.1.9 version
+  ghcr.io/bvolpato/promptcloak:0.1.10 version
 ```
 
 Source checkout:
@@ -55,7 +55,7 @@ For Python library mode, add release wheel to existing uv project:
 
 ```bash
 uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl
 ```
 
 ## Security rules

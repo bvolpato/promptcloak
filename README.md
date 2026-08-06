@@ -62,7 +62,7 @@ uv:
 
 ```bash
 uv tool install \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl
 promptcloak doctor
 ```
 
@@ -142,7 +142,7 @@ app.
 
 ```bash
 uv add \
-  https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9-py3-none-any.whl
+  https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10-py3-none-any.whl
 ```
 
 ```python
@@ -616,7 +616,7 @@ PROMPTCLOAK_TARGET_API_KEY=<openai-upstream-key>
 docker run -d --name promptcloak --rm \
   -p 127.0.0.1:8000:8000 \
   --env-file "$HOME/.config/promptcloak/provider.env" \
-  ghcr.io/bvolpato/promptcloak:0.1.9
+  ghcr.io/bvolpato/promptcloak:0.1.10
 
 curl --retry 10 --retry-connrefused --retry-delay 1 \
   -fsS http://127.0.0.1:8000/healthz
@@ -666,8 +666,8 @@ helm uninstall promptcloak
 Release asset:
 
 ```bash
-helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.9/promptcloak-0.1.9.tgz
-helm install promptcloak ./promptcloak-0.1.9.tgz \
+helm pull https://github.com/bvolpato/promptcloak/releases/download/v0.1.10/promptcloak-0.1.10.tgz
+helm install promptcloak ./promptcloak-0.1.10.tgz \
   --set env.PROMPTCLOAK_TARGET_DEFAULT_BASE_URL=https://api.openai.com/v1 \
   --set existingSecret=promptcloak-env
 ```
